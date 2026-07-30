@@ -1,0 +1,1 @@
+"""Chessoc desktop GUI package."""
