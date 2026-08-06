@@ -22,11 +22,12 @@ interface PieceProps {
   col: number;
   row: number;
   squareName: string;
+  interactive: boolean;
   onDrop: (fromSquare: string, point: { x: number; y: number }) => void;
   onPieceClick: (square: string) => void;
 }
 
-export function Piece({ char, col, row, squareName, onDrop, onPieceClick }: PieceProps) {
+export function Piece({ char, col, row, squareName, interactive, onDrop, onPieceClick }: PieceProps) {
   const position = PIECE_POSITIONS[char];
   if (!position) return null;
 
@@ -36,20 +37,18 @@ export function Piece({ char, col, row, squareName, onDrop, onPieceClick }: Piec
 
   return (
     <motion.div
-      className="absolute w-[12.5%] h-[12.5%] z-10 cursor-grab active:cursor-grabbing p-1 md:p-2"
+      className={`absolute z-10 h-[12.5%] w-[12.5%] p-1 md:p-2 ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
       initial={false}
       animate={{ left, top }}
-      whileHover={{ scale: 1.15 }}
+      whileHover={interactive ? { scale: 1.15 } : undefined}
       transition={{ type: "spring", stiffness: 200, damping: 25 }}
-      drag
+      drag={interactive}
       dragMomentum={false}
-      onDragStart={() => onPieceClick(squareName)}
-      onDragEnd={(event, info) => {
-        // Fire drop event with screen coordinates
-        onDrop(squareName, { x: info.point.x, y: info.point.y });
+      onClick={() => interactive && onPieceClick(squareName)}
+      onDragStart={() => interactive && onPieceClick(squareName)}
+      onDragEnd={(_, info) => {
+        if (interactive) onDrop(squareName, { x: info.point.x, y: info.point.y });
       }}
-      // Snap piece back to origin instantly if not dropped on a valid square. 
-      // The state update in Board will override this if it's a valid move.
       dragSnapToOrigin
     >
       <div

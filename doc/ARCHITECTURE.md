@@ -80,7 +80,7 @@ Fields: `gameId`, `version`, `initialFen`, `fen`, `sideToMove`, `moves[]`, `cloc
 
 ### 4.4 Ephemeral presentation (UI) state
 
-Local, volatile, lost on refresh — and that is acceptable. Never authoritative.
+Local, volatile, lost on refresh - and that is acceptable. Never authoritative.
 
 Fields: `selectedSquare`, `legalTargets` (sourced from a capability, not computed), `pendingIntentId`, `pendingAnimation`, `errorToast`, `modalOpen`, `dragGhost`.
 
@@ -105,11 +105,11 @@ The client must feel instant while never letting a local prediction become truth
 
 ### 5.1 Pattern
 
-1. **Pre-authorization.** With each projection the server sends the set of currently-permitted actions as **capabilities**. Each legal move has its own `move` capability containing one exact UCI (§7). The client groups these capabilities by source square to derive instant destination highlights — with no round trip and no rules engine.
+1. **Pre-authorization.** With each projection the server sends the set of currently-permitted actions as **capabilities**. Each legal move has its own `move` capability containing one exact UCI (§7). The client groups these capabilities by source square to derive instant destination highlights - with no round trip and no rules engine.
 2. **Immediate local feedback.** Selecting a piece, showing legal targets, dragging a ghost, and snapping a piece to a dropped square are all UI-state changes that happen at input time, with zero latency.
 3. **Predicted position is presentation-only.** When the user commits an action, the piece is shown at its destination as `pendingAnimation` in UI state, and an `intent` is sent. The authoritative projection is **not** touched.
 4. **Reconciliation on result.**
-   - **Accepted:** the server sends the new snapshot. The projection advances. Because the piece was already shown at the destination, there is no visible jump — the prediction simply becomes confirmed.
+   - **Accepted:** the server sends the new snapshot. The projection advances. Because the piece was already shown at the destination, there is no visible jump - the prediction simply becomes confirmed.
    - **Rejected / stale:** the projection is unchanged (or replaced by the server's current snapshot). The predicted piece animates back to its confirmed square, and the rejection reason is surfaced.
 5. **Local pre-check before send.** If the user drops on a square not present in the capability's legal set, the client MUST snap back immediately without sending an intent. This is a UI reflection of server-provided data, not a rules decision.
 
@@ -169,7 +169,7 @@ Every action the player can take is authorized by a single-use **capability** is
 
 ### 7.1 Capability shape
 
-A capability is bound to: `sessionId`, `gameId`, `gameVersion`, `kind`, exact permitted `params`, `expiresAt`, and an opaque server `signature`. The client treats `signature` as an opaque token — it never inspects or forges it.
+A capability is bound to: `sessionId`, `gameId`, `gameVersion`, `kind`, exact permitted `params`, `expiresAt`, and an opaque server `signature`. The client treats `signature` as an opaque token - it never inspects or forges it.
 
 - **Single-use / bijective:** one capability authorizes exactly one action instance with exactly one parameter set. For moves, `e2e4` and `e2e3` are two distinct capabilities. Once consumed (or once a newer projection arrives), it is invalid.
 - **Version-bound:** the client MUST NOT send an intent whose capability `gameVersion` differs from the current projection `version`.
@@ -232,7 +232,7 @@ Every live message is a versioned JSON envelope:
 - **Intent IDs & dedup:** every intent carries a client-generated `intentId`. If a `receipt` does not arrive within a timeout, the client MAY retry with the **same** `intentId`; the server deduplicates. `result` handling MUST be idempotent.
 - **Monotonic version:** ignore any snapshot/result whose `version` is older than the current projection.
 - **Stale handling:** a `stale` disposition means the client's action referenced an outdated version; the client adopts the server snapshot attached to the result and discards its predicted move.
-- **Reconnect/resync:** on reconnect the client sends `resync` with `lastKnownVersion`; the server replies with a full `resync_ok`. The client replaces its projection wholesale — no local merge.
+- **Reconnect/resync:** on reconnect the client sends `resync` with `lastKnownVersion`; the server replies with a full `resync_ok`. The client replaces its projection wholesale - no local merge.
 - **Full snapshots first:** correctness is defined against full snapshots. Delta/partial-update messages MAY be added later, but only once full-snapshot behavior is proven and tested.
 
 ```mermaid
@@ -296,19 +296,19 @@ Rules:
 
 ### 10.1 Web layout (target)
 
-- `web/src/lib/protocol.ts` — envelope + message types, version check.
-- `web/src/lib/transport.ts`, `web/src/lib/mock-transport.ts` — live + dev transports behind one interface.
-- `web/src/lib/store.ts` (reducer + state machine) — auth/connection/projection/UI.
-- `web/src/lib/view-model.ts` — FEN→pieces, capability→targets adapters.
-- `web/src/hooks/use-game.ts` — wires transport ↔ store, exposes state + `sendIntent` (with local prediction).
-- `web/src/components/ui/*` — presentational components (see §15).
+- `web/src/lib/protocol.ts` - envelope + message types, version check.
+- `web/src/lib/transport.ts`, `web/src/lib/mock-transport.ts` - live + dev transports behind one interface.
+- `web/src/lib/store.ts` (reducer + state machine) - auth/connection/projection/UI.
+- `web/src/lib/view-model.ts` - FEN→pieces, capability→targets adapters.
+- `web/src/hooks/use-game.ts` - wires transport ↔ store, exposes state + `sendIntent` (with local prediction).
+- `web/src/components/ui/*` - presentational components (see §15).
 
 ### 10.2 Python layout (target)
 
-- `chessoc_gui/protocol.py` — dataclasses mirroring the envelope/messages.
+- `chessoc_gui/protocol.py` - dataclasses mirroring the envelope/messages.
 - `chessoc_gui/transport.py` (interface) + `wss_transport.py` / `tcp_transport.py` / `mock_transport.py`.
-- `chessoc_gui/state.py` — projection + reducer + connection/auth state.
-- `chessoc_gui/auth_store.py` — secure token storage abstraction.
+- `chessoc_gui/state.py` - projection + reducer + connection/auth state.
+- `chessoc_gui/auth_store.py` - secure token storage abstraction.
 - Preserved presentation modules: `board_view.py`, `fen.py`, `controls.py`, `theme.py`.
 
 ## 11. Temporary Mock API
@@ -336,7 +336,7 @@ Until the real server transport exists, both clients develop and test against a 
 | Unsupported capability kind  | Render inert/disabled; never execute.                                                    |
 | Malformed / bad-version msg  | Drop it, surface a non-fatal error; do not corrupt projection.                           |
 
-While disconnected the board remains visible at its last confirmed state, but it is read-only — no prediction is allowed without a live, authorized connection.
+While disconnected the board remains visible at its last confirmed state, but it is read-only - no prediction is allowed without a live, authorized connection.
 
 ## 13. Accessibility and Responsive UX
 
@@ -362,7 +362,7 @@ While disconnected the board remains visible at its last confirmed state, but it
 
 ## 15. Migration Map From Current Code
 
-### 15.1 Web — remove authority, keep presentation
+### 15.1 Web - remove authority, keep presentation
 
 Authoritative logic to **remove** from [web/src/app/(game)/room/[id]/page.tsx](web/src/app/(game)/room/[id]/page.tsx):
 
@@ -375,9 +375,9 @@ Replace with: a `use-game` hook exposing the server projection, capabilities, an
 
 [web/src/components/ui/Board.tsx](web/src/components/ui/Board.tsx): stop taking a `Chess` object and calling `game.moves()`; take a **view-model** (`fen`→pieces, server-provided `legalTargets`, `pendingAnimation`, `interactive`). Remove the `chess.js` import.
 
-**Preserve** the reusable presentation: Framer Motion piece animation and drag in [web/src/components/ui/Piece.tsx](web/src/components/ui/Piece.tsx) (add `interactive`/`pending` and conditional snap-back), [web/src/components/ui/MoveHistory.tsx](web/src/components/ui/MoveHistory.tsx) and [web/src/components/ui/CapturedPieces.tsx](web/src/components/ui/CapturedPieces.tsx) (already pure presentational — fed by server data), and the landing/room styling. Rework [web/src/components/ui/GameOverModal.tsx](web/src/components/ui/GameOverModal.tsx) to render the server result and a rematch capability instead of a local restart.
+**Preserve** the reusable presentation: Framer Motion piece animation and drag in [web/src/components/ui/Piece.tsx](web/src/components/ui/Piece.tsx) (add `interactive`/`pending` and conditional snap-back), [web/src/components/ui/MoveHistory.tsx](web/src/components/ui/MoveHistory.tsx) and [web/src/components/ui/CapturedPieces.tsx](web/src/components/ui/CapturedPieces.tsx) (already pure presentational - fed by server data), and the landing/room styling. Rework [web/src/components/ui/GameOverModal.tsx](web/src/components/ui/GameOverModal.tsx) to render the server result and a rematch capability instead of a local restart.
 
-### 15.2 Python — remove scripted authority, keep the renderer
+### 15.2 Python - remove scripted authority, keep the renderer
 
 Remove from [python_gui/chessoc_gui/app.py](python_gui/chessoc_gui/app.py): the authoritative fields and scripted flow (`current_fen`/`current_board` as the source of truth, hardcoded clocks, `interaction_stage`/`_expected_player_action`, and the pre-baked `sequence.py`/`models.py` move outcomes). These move to dev fixtures and are replaced by transport + reducer.
 
@@ -397,11 +397,11 @@ Remove from [python_gui/chessoc_gui/app.py](python_gui/chessoc_gui/app.py): the 
 
 ### 16.2 Phased rollout
 
-1. **Shared contract** — protocol types + fixtures.
-2. **Mock service** — deterministic scenarios over HTTPS/WSS.
-3. **Web transport + reducer** — projection/UI separation, prediction/reconciliation.
-4. **Web UI** — board/pieces/clocks/modals on the view-model; `chess.js` removed.
-5. **Python transport + reducer** — same contract, secure token store.
-6. **Python UI** — renderer wired to projection; scripted authority removed.
-7. **Auth + reconnect hardening** — tickets, resync, edge cases, accessibility, tests.
+1. **Shared contract** - protocol types + fixtures.
+2. **Mock service** - deterministic scenarios over HTTPS/WSS.
+3. **Web transport + reducer** - projection/UI separation, prediction/reconciliation.
+4. **Web UI** - board/pieces/clocks/modals on the view-model; `chess.js` removed.
+5. **Python transport + reducer** - same contract, secure token store.
+6. **Python UI** - renderer wired to projection; scripted authority removed.
+7. **Auth + reconnect hardening** - tickets, resync, edge cases, accessibility, tests.
 
