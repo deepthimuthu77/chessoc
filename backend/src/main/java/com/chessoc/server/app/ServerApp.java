@@ -1,7 +1,9 @@
 package com.chessoc.server.app;
 
 import com.chessoc.server.engine.EngineAdapter;
+import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.InMemoryMatchRepository;
+import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchRepository;
 import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.match.state.PostgresMatchRepository;
@@ -45,8 +47,9 @@ public final class ServerApp {
         SessionRegistry sessions = new SessionRegistry();
         ProtocolCodec codec = new ProtocolCodec();
         LiveGateway gateway = new LiveGateway(tickets, sessions, matches, codec);
+        Lobby lobby = new Lobby(matches, TimeControl.fischer(600_000, 5_000));
 
-        this.http = new HttpAuthApi(config.httpPort(), tokens, tickets, sessions, matches,
+        this.http = new HttpAuthApi(config.httpPort(), tokens, tickets, sessions, matches, lobby,
                 config.tokenTtlMs(), clock);
         this.ws = new WebSocketLiveServer(new InetSocketAddress(config.wsPort()), gateway);
     }

@@ -47,7 +47,7 @@ public final class MatchGame {
     private final Variant variant;
     private final Fen initialFen;
     private final String whiteId;
-    private final String blackId;
+    private String blackId;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final List<Uci> moves = new ArrayList<>();
@@ -85,6 +85,23 @@ public final class MatchGame {
 
     public String gameId() {
         return gameId;
+    }
+
+    /** Resolve the caller's colour, claiming the open Black seat on first distinct joiner. */
+    public String seatFor(String playerId) {
+        lock.lock();
+        try {
+            if (playerId.equals(whiteId)) {
+                return "white";
+            }
+            if (blackId == null) {
+                blackId = playerId;
+                return "black";
+            }
+            return playerId.equals(blackId) ? "black" : "spectator";
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void subscribe(Session session, OutboundSink sink) {
@@ -262,11 +279,15 @@ public final class MatchGame {
 
     private void reissueAllCaps() {
         currentCaps.clear();
-        for (String playerId : List.of(whiteId, blackId)) {
+        for (String playerId : seatedPlayers()) {
             if (subscribers.containsKey(playerId)) {
                 buildCapsFor(playerId);
             }
         }
+    }
+
+    private List<String> seatedPlayers() {
+        return blackId == null ? List.of(whiteId) : List.of(whiteId, blackId);
     }
 
     private List<Capability> ensureCapsFor(String playerId) {
@@ -405,7 +426,8 @@ public final class MatchGame {
                 - (live && sideToMove() == Side.BLACK ? now - turnStartMs : 0);
         ClockSample sample = new ClockSample(white, black, sideToMove(), now);
         return new GameSnapshot(gameId, version, initialFen, currentFen, sideToMove(),
-                List.copyOf(moves), sample, Optional.ofNullable(result), whiteId, blackId);
+                List.copyOf(moves), sample, Optional.ofNullable(result), whiteId,
+                blackId == null ? "" : blackId);
     }
 
     private Side sideToMove() {
@@ -416,14 +438,15 @@ public final class MatchGame {
         if (whiteId.equals(playerId)) {
             return Side.WHITE;
         }
-        if (blackId.equals(playerId)) {
+        if (playerId.equals(blackId)) {
             return Side.BLACK;
         }
         return null;
     }
 
     private String opponentOf(String playerId) {
-        return whiteId.equals(playerId) ? blackId : whiteId;
+        String opponent = whiteId.equals(playerId) ? blackId : whiteId;
+        return opponent == null ? "" : opponent;
     }
 
     private long now() {

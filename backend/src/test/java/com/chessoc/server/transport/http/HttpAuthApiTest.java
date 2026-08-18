@@ -3,7 +3,9 @@ package com.chessoc.server.transport.http;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.chessoc.server.engine.adapter.UnavailableEngine;
+import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.InMemoryMatchRepository;
+import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.match.state.Scheduler;
 import com.chessoc.server.session.SessionRegistry;
@@ -33,10 +35,11 @@ class HttpAuthApiTest {
         };
         MatchService matches = new MatchService(new UnavailableEngine(), new InMemoryMatchRepository(),
                 noop, () -> 0L);
+        Lobby lobby = new Lobby(matches, TimeControl.fischer(180_000, 2_000));
         api = new HttpAuthApi(0,
                 new TokenService("secret".getBytes(StandardCharsets.UTF_8)),
                 new TicketService(() -> 0L, 60_000),
-                new SessionRegistry(), matches, 3_600_000, () -> 0L);
+                new SessionRegistry(), matches, lobby, 3_600_000, () -> 0L);
         api.start();
     }
 
@@ -56,6 +59,18 @@ class HttpAuthApiTest {
         HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return mapper.readTree(response.body());
+    }
+
+    @Test
+    void joinSeatsWhiteThenBlackInSameRoom() throws Exception {
+        String aliceToken = post("/login", "{\"playerId\":\"alice\"}", null).path("token").asText();
+        JsonNode alice = post("/join", "{\"room\":\"r1\"}", aliceToken);
+        assertThat(alice.path("color").asText()).isEqualTo("white");
+
+        String bobToken = post("/login", "{\"playerId\":\"bob\"}", null).path("token").asText();
+        JsonNode bob = post("/join", "{\"room\":\"r1\"}", bobToken);
+        assertThat(bob.path("color").asText()).isEqualTo("black");
+        assertThat(bob.path("gameId").asText()).isEqualTo(alice.path("gameId").asText());
     }
 
     @Test
