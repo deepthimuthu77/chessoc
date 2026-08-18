@@ -35,7 +35,9 @@ import java.util.function.Supplier;
  */
 public final class MatchGame {
 
-    private static final long CAPABILITY_TTL_MS = 60_000;
+    // Capabilities are version-bound (replaced on every new snapshot), so a generous expiry is safe;
+    // it must outlast a player's think time.
+    private static final long CAPABILITY_TTL_MS = 3_600_000;
 
     private final ValidatorClient engine;
     private final MatchRepository repository;
@@ -55,6 +57,10 @@ public final class MatchGame {
     private final Map<String, Subscriber> subscribers = new LinkedHashMap<>();
     private final Map<String, Capability> currentCaps = new HashMap<>();
     private final Map<String, Messages.Result> resultByIntent = new HashMap<>();
+
+    private final boolean rated;
+    private final TimeControl timeControl;
+    private java.util.function.Consumer<GameResult> completionListener;
 
     private Fen currentFen;
     private long version;
@@ -76,7 +82,9 @@ public final class MatchGame {
         this.currentFen = spec.initialFen();
         this.whiteId = spec.whiteId();
         this.blackId = spec.blackId();
+        this.rated = spec.rated();
         TimeControl tc = spec.timeControl();
+        this.timeControl = tc;
         clocks.put(Side.WHITE, Clock.start(tc));
         clocks.put(Side.BLACK, Clock.start(tc));
         this.turnStartMs = clock.getAsLong();
@@ -85,6 +93,31 @@ public final class MatchGame {
 
     public String gameId() {
         return gameId;
+    }
+
+    public String whiteId() {
+        return whiteId;
+    }
+
+    public String blackId() {
+        return blackId;
+    }
+
+    public Variant variant() {
+        return variant;
+    }
+
+    public TimeControl timeControl() {
+        return timeControl;
+    }
+
+    public boolean rated() {
+        return rated;
+    }
+
+    /** Fired once when the game ends (terminal, resign, draw, timeout). */
+    public void onComplete(java.util.function.Consumer<GameResult> listener) {
+        this.completionListener = listener;
     }
 
     /** Resolve the caller's colour, claiming the open Black seat on first distinct joiner. */
@@ -275,6 +308,14 @@ public final class MatchGame {
         result = r;
         pendingDrawOfferBy = null;
         cancelFlag();
+        if (completionListener != null) {
+            try {
+                completionListener.accept(r); // rating/history persistence must not abort completion
+            } catch (RuntimeException e) {
+                System.err.println("game completion listener failed for " + gameId + ": " + e);
+                e.printStackTrace();
+            }
+        }
     }
 
     private void reissueAllCaps() {

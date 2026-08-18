@@ -46,10 +46,9 @@ public final class SmokeClient {
     }
 
     private boolean run() throws Exception {
-        String token = post("/login", "{\"playerId\":\"white\"}", null).path("token").asText();
+        String token = post("/login", "{}", null).path("token").asText();
+        String gameId = post("/play/create", "{\"minutes\":5}", token).path("gameId").asText();
         String ticket = post("/ticket", "{}", token).path("ticket").asText();
-        String gameId = post("/game", "{\"whiteId\":\"white\",\"blackId\":\"black\"}", null)
-                .path("gameId").asText();
 
         CountDownLatch done = new CountDownLatch(1);
         AtomicBoolean accepted = new AtomicBoolean();

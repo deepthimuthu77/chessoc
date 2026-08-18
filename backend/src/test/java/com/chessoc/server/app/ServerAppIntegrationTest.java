@@ -44,10 +44,13 @@ class ServerAppIntegrationTest {
         }
 
         try {
-            String token = post(app.httpPort(), "/login", "{\"playerId\":\"bob\"}", null).path("token").asText();
+            // creator is White; connect as a second player (Black) so no engine call is needed
+            String creator = post(app.httpPort(), "/login", "{}", null).path("token").asText();
+            String gameId = post(app.httpPort(), "/play/create", "{\"minutes\":5}", creator)
+                    .path("gameId").asText();
+            String token = post(app.httpPort(), "/login", "{}", null).path("token").asText();
+            post(app.httpPort(), "/join", "{\"room\":\"" + gameId + "\"}", token);
             String ticket = post(app.httpPort(), "/ticket", "{}", token).path("ticket").asText();
-            String gameId = post(app.httpPort(), "/game",
-                    "{\"whiteId\":\"alice\",\"blackId\":\"bob\"}", null).path("gameId").asText();
 
             CountDownLatch received = new CountDownLatch(1);
             AtomicReference<String> firstMessage = new AtomicReference<>();
