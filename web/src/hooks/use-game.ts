@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { getAuth } from '@/lib/auth';
 import { Capability, MessageType, type Color } from '@/lib/protocol';
 import { initialState, reducer } from '@/lib/store';
 import { LiveTransport } from '@/lib/transport';
@@ -21,16 +22,6 @@ import {
   promotionChoices,
   toModalResult,
 } from '@/lib/view-model';
-
-function stablePlayerId(): string {
-  const key = 'chessoc-player-id';
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = `p-${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(key, id);
-  }
-  return id;
-}
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -59,7 +50,7 @@ export function useGame(room: string) {
 
     (async () => {
       try {
-        const { token } = await api.login(stablePlayerId());
+        const token = getAuth()?.token ?? (await api.guest()).token;
         const seat = await api.join(room, token);
         if (cancelled) return;
         setColor(seat.color);
