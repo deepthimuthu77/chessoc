@@ -1,0 +1,17 @@
+# Overlay to drive the real vector64 binary instead of the in-container dev engine.
+#
+# The binary is native (e.g. a Windows .exe) and cannot run inside the Linux image, so it runs on the
+# host behind the engine bridge; the containerized server reaches it over host.docker.internal.
+#
+#   1. host:  java -cp "build/install/chessoc-server/lib/*" \
+#               com.chessoc.server.app.EngineBridge 9200 /path/to/ChessEngine-all.exe
+#   2. stack: docker compose -f docker-compose.yml -f docker-compose.binary.yml up -d server
+services:
+  server:
+    environment:
+      CHESSOC_ENGINE_HOST: host.docker.internal
+      CHESSOC_ENGINE_PORT: "9200"
+      CHESSOC_VALIDATOR_WORKERS: "2"
+      CHESSOC_SEARCH_WORKERS: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -72,6 +72,33 @@ class ValidatorProtocolTest {
     }
 
     @Test
+    void parsesRealEngineLegalApply() {
+        // vector64 shape: ok + legal, extra fields tolerated.
+        String json = "{\"ok\":true,\"legal\":true,"
+                + "\"fen\":\"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1\","
+                + "\"sideToMove\":\"b\",\"inCheck\":false,\"terminal\":\"none\",\"capturedDropType\":null}";
+        ApplyResult r = proto.parseApply(json);
+        assertThat(r.legal()).isTrue();
+        assertThat(r.sideToMove()).contains(Side.BLACK);
+    }
+
+    @Test
+    void treatsRealEngineIllegalErrorAsIllegalNotFault() {
+        // vector64 reports illegal via the error field; it must not raise.
+        ApplyResult r = proto.parseApply(
+                "{\"ok\":false,\"error\":\"illegal_move\",\"reason\":\"not legal in this position\"}");
+        assertThat(r.legal()).isFalse();
+        assertThat(r.reason()).contains("not legal in this position");
+    }
+
+    @Test
+    void malformedErrorStillRaises() {
+        assertThatThrownBy(() -> proto.parseApply("{\"ok\":false,\"error\":\"malformed_request\",\"reason\":\"bad fen\"}"))
+                .isInstanceOf(EngineException.class)
+                .satisfies(e -> assertThat(((EngineException) e).code()).isEqualTo(EngineErrorCode.MALFORMED_REQUEST));
+    }
+
+    @Test
     void raisesTypedErrorReplies() {
         assertThatThrownBy(() -> proto.parseApply("{\"error\":\"malformed_request\",\"message\":\"bad fen\"}"))
                 .isInstanceOf(EngineException.class)

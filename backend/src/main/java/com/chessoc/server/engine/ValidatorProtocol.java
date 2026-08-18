@@ -46,9 +46,16 @@ public final class ValidatorProtocol {
 
     public ApplyResult parseApply(String json) {
         JsonNode n = EngineJson.read(json);
-        raiseIfError(n);
+        // An illegal move is a well-formed result, not a fault; only malformed/internal errors raise.
+        if (n.hasNonNull("error")) {
+            EngineErrorCode code = errorCode(n.get("error").asText());
+            if (code == EngineErrorCode.ILLEGAL_MOVE) {
+                return ApplyResult.illegal(n.path("reason").asText("illegal_move"));
+            }
+            throw new EngineException(code, message(n));
+        }
         if (!n.path("legal").asBoolean(false)) {
-            return ApplyResult.illegal(n.path("reason").asText("illegal"));
+            return ApplyResult.illegal(n.path("reason").asText("illegal_move"));
         }
         Fen fen = Fen.parse(EngineJson.required(n, "fen"));
         Terminal terminal = Terminal.fromWire(n.path("terminal").asText("none"));
@@ -87,8 +94,19 @@ public final class ValidatorProtocol {
 
     private void raiseIfError(JsonNode n) {
         if (n.hasNonNull("error")) {
-            throw new EngineException(EngineErrorCode.fromWire(n.get("error").asText()),
-                    n.path("message").asText(""));
+            throw new EngineException(errorCode(n.get("error").asText()), message(n));
         }
+    }
+
+    private static EngineErrorCode errorCode(String wire) {
+        try {
+            return EngineErrorCode.fromWire(wire);
+        } catch (IllegalArgumentException e) {
+            return EngineErrorCode.INTERNAL_ERROR;
+        }
+    }
+
+    private static String message(JsonNode n) {
+        return n.path("message").asText(n.path("reason").asText(""));
     }
 }

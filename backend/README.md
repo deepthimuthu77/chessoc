@@ -21,6 +21,23 @@ Smoke-test a live move end-to-end (login → game → WSS → engine → persist
 java -cp "build/install/chessoc-server/lib/*" com.chessoc.server.app.SmokeClient
 ```
 
+### Use the real vector64 binary
+
+The engine binary is native and cannot run inside the Linux image, so it runs on the host behind the
+engine bridge; the containerized server reaches it over `host.docker.internal`:
+
+```bash
+# 1. host: expose the binary over TCP (one engine process per connection)
+java -cp "build/install/chessoc-server/lib/*" \
+  com.chessoc.server.app.EngineBridge 9200 /path/to/ChessEngine-all
+
+# 2. stack: point the server at the bridge
+docker compose -f docker-compose.yml -f docker-compose.binary.yml up -d server
+```
+
+Fully containerizing the real engine instead needs a Linux build of it, run in the `engine` service
+with `ENGINE_CMD` (which proxies the same line protocol to the binary).
+
 ## Build & run (local)
 
 ```bash
@@ -58,9 +75,10 @@ its own service later without rewriting callers.
 ## Status
 
 Runnable end-to-end in Docker for standard/crazyhouse single-board games: auth → ticket → WSS → the
-engine service validates/applies the move → Postgres persists the ply. Covered by tests including a
-full-stack HTTP+WSS integration test and real process/TCP engine tests (the Postgres JDBC test runs
-when `CHESSOC_TEST_DB_URL` is set).
+engine validates/applies the move → Postgres persists the ply. Verified against both the real vector64
+binary (`ChessEngine-all`, via the engine bridge) and the python-chess dev engine. Covered by tests
+including a full-stack HTTP+WSS integration test and real process/TCP engine tests (the Postgres JDBC
+test runs when `CHESSOC_TEST_DB_URL` is set).
 
 Not yet the production integration: the vector64 binary (the engine service proxies to it via
 `ENGINE_CMD`; the default dev engine is python-chess), Redis presence/affinity, OAuth/password login
