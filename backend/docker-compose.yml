@@ -1,0 +1,55 @@
+name: chessoc
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: chessoc
+      POSTGRES_USER: chessoc
+      POSTGRES_PASSWORD: chessoc
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chessoc -d chessoc"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  engine:
+    build: ./engine
+    environment:
+      ENGINE_PORT: "9100"
+      # Use the real vector64 binary instead of the dev engine:
+      #   ENGINE_CMD: /opt/engine/bin/ChessEngine-validator
+    # volumes:
+    #   - /path/to/vector64/bin:/opt/engine/bin:ro
+    ports:
+      - "9100:9100"
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      engine:
+        condition: service_started
+    environment:
+      CHESSOC_HTTP_PORT: "8080"
+      CHESSOC_WS_PORT: "8081"
+      CHESSOC_ENGINE_HOST: engine
+      CHESSOC_ENGINE_PORT: "9100"
+      CHESSOC_DB_URL: jdbc:postgresql://postgres:5432/chessoc
+      CHESSOC_DB_USER: chessoc
+      CHESSOC_DB_PASSWORD: chessoc
+      CHESSOC_TOKEN_SECRET: dev-secret-change-me
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
+volumes:
+  pgdata:

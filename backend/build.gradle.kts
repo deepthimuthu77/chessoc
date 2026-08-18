@@ -23,6 +23,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
+    implementation("org.postgresql:postgresql:42.7.4")
     implementation("org.slf4j:slf4j-api:2.0.13")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
 

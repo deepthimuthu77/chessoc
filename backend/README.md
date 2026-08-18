@@ -4,19 +4,33 @@ Java Game Server for chessoc — authoritative orchestration (sessions, clocks, 
 persistence, broadcast). It computes **no** chess semantics; all chess truth is delegated to the
 vector64 engine. See `doc/BACKEND_ARCHITECTURE.md` and `doc/ENGINE_INTEGRATION.md`.
 
-## Build & run
+## Run in Docker (postgres + engine + server)
+
+```bash
+docker compose up --build
+```
+
+Brings up Postgres, the engine service, and the server (HTTP 8080, WSS 8081). The engine service is a
+thin TCP front over the validator line protocol: with no binary it runs a correct dev engine
+(python-chess, standard + crazyhouse); to use the real vector64 binary, mount it and set `ENGINE_CMD`
+in `docker-compose.yml`.
+
+Smoke-test a live move end-to-end (login → game → WSS → engine → persisted):
+
+```bash
+java -cp "build/install/chessoc-server/lib/*" com.chessoc.server.app.SmokeClient
+```
+
+## Build & run (local)
 
 ```bash
 ./gradlew build
 ./gradlew run
 ```
 
-Java 17, Gradle wrapper pinned. `run` starts HTTP (8080) and WSS (8081). With no engine configured
-the auth + transport layers come up but chess calls fail by design — point it at a validator binary:
-
-```bash
-CHESSOC_VALIDATOR_CMD="/path/to/ChessEngine-validator" ./gradlew run
-```
+Java 17, Gradle wrapper pinned. Engine selection: `CHESSOC_ENGINE_HOST`/`CHESSOC_ENGINE_PORT` (TCP
+service) or `CHESSOC_VALIDATOR_CMD` (spawned binary); neither → chess calls fail by design.
+Persistence: `CHESSOC_DB_URL`/`_USER`/`_PASSWORD` (Postgres) or in-memory when unset.
 
 Play path: `POST /login {playerId}` → token · `POST /ticket` (Bearer token) → single-use ticket ·
 `POST /game {whiteId,blackId}` → gameId · connect `ws://host:8081/game?ticket=&gameId=`.
@@ -31,7 +45,7 @@ its own service later without rewriting callers.
 - `protocol` — versioned envelope + message catalog (§8), codec with major-version refusal.
 - `capability` — single-use, version-bound action authorisations (§7).
 - `engine` / `engine.adapter` — `EngineAdapter` contract, validator/search wire codecs, and the real
-  Adapter: single-request worker pool, process line-protocol worker with timeout + eviction.
+  Adapter: single-request worker pool, process + TCP line-protocol workers with timeout + eviction.
 - `match` — server clocks, time-control buckets, drop-variant `Reserve`, `Match` aggregate.
 - `match.state` — the authoritative single-writer game: pre-commit gate, capability issuance from
   engine legal moves, flag timers, terminal/resign/draw/timeout resolution, per-ply persistence,
@@ -43,9 +57,12 @@ its own service later without rewriting callers.
 
 ## Status
 
-Runnable end-to-end for standard/crazyhouse single-board games (auth → ticket → WSS → play), covered
-by 72 tests including a full-stack HTTP+WSS integration test and a real-subprocess engine test.
+Runnable end-to-end in Docker for standard/crazyhouse single-board games: auth → ticket → WSS → the
+engine service validates/applies the move → Postgres persists the ply. Covered by tests including a
+full-stack HTTP+WSS integration test and real process/TCP engine tests (the Postgres JDBC test runs
+when `CHESSOC_TEST_DB_URL` is set).
 
-Interfaced with in-memory/dev implementations, not yet the production integration: Postgres
-(`MatchRepository`), Redis presence/affinity, the vector64 binary (`EngineAdapter`), OAuth/password
-login, and bughouse's two-board hand coupling. Remaining phases in `doc/BACKEND_ARCHITECTURE.md §16`.
+Not yet the production integration: the vector64 binary (the engine service proxies to it via
+`ENGINE_CMD`; the default dev engine is python-chess), Redis presence/affinity, OAuth/password login
+(dev `/login` stand-in), and bughouse's two-board hand coupling. Remaining phases in
+`doc/BACKEND_ARCHITECTURE.md §16`.

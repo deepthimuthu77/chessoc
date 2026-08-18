@@ -5,6 +5,7 @@ import com.chessoc.server.engine.adapter.EngineWorker;
 import com.chessoc.server.engine.adapter.EngineWorkerPool;
 import com.chessoc.server.engine.adapter.PooledEngineAdapter;
 import com.chessoc.server.engine.adapter.ProcessEngineWorker;
+import com.chessoc.server.engine.adapter.TcpEngineWorker;
 import com.chessoc.server.engine.adapter.UnavailableEngine;
 import java.util.function.Supplier;
 
@@ -29,17 +30,31 @@ public final class Main {
 
         app.start();
         System.out.println("chessoc-server up - http=" + app.httpPort() + " ws=" + app.wsPort()
-                + (config.validatorCommand().isEmpty() ? " (no engine configured)" : ""));
+                + " engine=" + engineMode(config)
+                + " db=" + (config.dbUrl().isBlank() ? "memory" : "postgres"));
+    }
+
+    private static String engineMode(ServerConfig config) {
+        if (config.enginePort() > 0) {
+            return "tcp:" + config.engineHost() + ":" + config.enginePort();
+        }
+        return config.validatorCommand().isEmpty() ? "none" : "process";
     }
 
     private static EngineAdapter buildEngine(ServerConfig config) {
-        if (config.validatorCommand().isEmpty()) {
+        Supplier<EngineWorker> validators;
+        Supplier<EngineWorker> searchers;
+        if (config.enginePort() > 0) {
+            validators = () -> new TcpEngineWorker(config.engineHost(), config.enginePort(), config.validatorTimeout());
+            searchers = validators;
+        } else if (!config.validatorCommand().isEmpty()) {
+            validators = () -> new ProcessEngineWorker(config.validatorCommand());
+            searchers = config.searchCommand().isEmpty()
+                    ? validators
+                    : () -> new ProcessEngineWorker(config.searchCommand());
+        } else {
             return new UnavailableEngine();
         }
-        Supplier<EngineWorker> validators = () -> new ProcessEngineWorker(config.validatorCommand());
-        Supplier<EngineWorker> searchers = config.searchCommand().isEmpty()
-                ? validators
-                : () -> new ProcessEngineWorker(config.searchCommand());
         return new PooledEngineAdapter(
                 new EngineWorkerPool(config.validatorWorkers(), validators),
                 new EngineWorkerPool(config.searchWorkers(), searchers),

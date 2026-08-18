@@ -4,6 +4,7 @@ import com.chessoc.server.engine.EngineAdapter;
 import com.chessoc.server.match.state.InMemoryMatchRepository;
 import com.chessoc.server.match.state.MatchRepository;
 import com.chessoc.server.match.state.MatchService;
+import com.chessoc.server.match.state.PostgresMatchRepository;
 import com.chessoc.server.match.state.Scheduler;
 import com.chessoc.server.match.state.SystemScheduler;
 import com.chessoc.server.matchmaking.MatchmakingService;
@@ -35,7 +36,9 @@ public final class ServerApp {
         Scheduler scheduler = new SystemScheduler(schedulerExecutor);
         LongSupplier clock = System::currentTimeMillis;
 
-        MatchRepository repository = new InMemoryMatchRepository();
+        MatchRepository repository = config.dbUrl().isBlank()
+                ? new InMemoryMatchRepository()
+                : new PostgresMatchRepository(config.dbUrl(), config.dbUser(), config.dbPassword());
         MatchService matches = new MatchService(engine, repository, scheduler, clock);
         TokenService tokens = new TokenService(config.tokenSecret());
         TicketService tickets = new TicketService(clock, config.ticketTtlMs());

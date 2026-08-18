@@ -34,7 +34,9 @@ class ServerAppIntegrationTest {
         ServerConfig config = new ServerConfig(0, 0,
                 "secret".getBytes(StandardCharsets.UTF_8),
                 Duration.ofHours(1).toMillis(), Duration.ofMinutes(1).toMillis(),
-                List.of(), List.of(), 1, 1, Duration.ofSeconds(1), Duration.ofSeconds(1));
+                "", 0,
+                List.of(), List.of(), 1, 1, Duration.ofSeconds(1), Duration.ofSeconds(1),
+                "", "", "");
         ServerApp app = new ServerApp(config, new UnavailableEngine());
         app.start();
         for (int i = 0; i < 100 && app.wsPort() == 0; i++) {

@@ -5,8 +5,9 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Server configuration. Engine commands are empty by default — auth and transport still start, but
- * chess calls fail until a validator binary is wired in.
+ * Server configuration. The engine is reached either over TCP (an engine service) or by spawning a
+ * local binary; with neither set, auth and transport start but chess calls fail. A blank DB URL keeps
+ * state in memory.
  */
 public record ServerConfig(
         int httpPort,
@@ -14,12 +15,17 @@ public record ServerConfig(
         byte[] tokenSecret,
         long tokenTtlMs,
         long ticketTtlMs,
+        String engineHost,
+        int enginePort,
         List<String> validatorCommand,
         List<String> searchCommand,
         int validatorWorkers,
         int searchWorkers,
         Duration validatorTimeout,
-        Duration searchTimeout) {
+        Duration searchTimeout,
+        String dbUrl,
+        String dbUser,
+        String dbPassword) {
 
     public static ServerConfig defaults() {
         return new ServerConfig(
@@ -27,9 +33,11 @@ public record ServerConfig(
                 "dev-secret-change-me".getBytes(StandardCharsets.UTF_8),
                 Duration.ofHours(12).toMillis(),
                 Duration.ofSeconds(30).toMillis(),
+                "", 0,
                 List.of(), List.of(),
                 8, 2,
-                Duration.ofSeconds(2), Duration.ofSeconds(30));
+                Duration.ofSeconds(2), Duration.ofSeconds(30),
+                "", "", "");
     }
 
     public static ServerConfig fromEnv() {
@@ -39,10 +47,15 @@ public record ServerConfig(
                 intEnv("CHESSOC_WS_PORT", d.wsPort()),
                 envOr("CHESSOC_TOKEN_SECRET", "dev-secret-change-me").getBytes(StandardCharsets.UTF_8),
                 d.tokenTtlMs(), d.ticketTtlMs(),
+                envOr("CHESSOC_ENGINE_HOST", ""),
+                intEnv("CHESSOC_ENGINE_PORT", 0),
                 words(System.getenv("CHESSOC_VALIDATOR_CMD")),
                 words(System.getenv("CHESSOC_SEARCH_CMD")),
                 d.validatorWorkers(), d.searchWorkers(),
-                d.validatorTimeout(), d.searchTimeout());
+                d.validatorTimeout(), d.searchTimeout(),
+                envOr("CHESSOC_DB_URL", ""),
+                envOr("CHESSOC_DB_USER", ""),
+                envOr("CHESSOC_DB_PASSWORD", ""));
     }
 
     private static String envOr(String key, String fallback) {
