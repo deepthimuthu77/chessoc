@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 import { getSettings, setSettings, type Settings } from '@/lib/settings';
@@ -15,14 +16,19 @@ const TOGGLES: { key: keyof Settings; label: string; help: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const { account, ready, logout } = useAuth(true);
+  const { account, token, ready, logout } = useAuth(true);
   const [settings, setLocal] = useState<Settings | null>(null);
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [delPw, setDelPw] = useState('');
+  const [delMsg, setDelMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setLocal(getSettings());
   }, []);
 
-  if (!ready || !account || !settings) {
+  if (!ready || !account || !settings || !token) {
     return <main className="min-h-screen bg-slate-950" />;
   }
 
@@ -31,6 +37,30 @@ export default function SettingsPage() {
     setLocal(next);
     setSettings(next);
   };
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwMsg(null);
+    try {
+      await api.changePassword(oldPw, newPw, token!);
+      setOldPw('');
+      setNewPw('');
+      setPwMsg('Password changed.');
+    } catch (err) {
+      setPwMsg((err as Error).message);
+    }
+  }
+
+  async function deleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDelMsg(null);
+    try {
+      await api.deleteAccount(delPw, token!);
+      logout();
+    } catch (err) {
+      setDelMsg((err as Error).message);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -58,6 +88,43 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+
+        <h2 className="mb-3 mt-10 text-xs font-bold uppercase tracking-wider text-zinc-500">Account</h2>
+        <form onSubmit={changePassword} className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <input
+            type="password"
+            value={oldPw}
+            onChange={(e) => setOldPw(e.target.value)}
+            placeholder="Current password"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+          />
+          <input
+            type="password"
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+            placeholder="New password"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+          />
+          <button type="submit" className="self-start rounded-xl bg-blue-600 px-5 py-2 font-bold text-white transition-colors hover:bg-blue-500">
+            Change password
+          </button>
+          {pwMsg && <p className="text-sm text-zinc-400">{pwMsg}</p>}
+        </form>
+
+        <form onSubmit={deleteAccount} className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-zinc-900 p-6">
+          <span className="text-sm font-bold text-rose-400">Delete account</span>
+          <input
+            type="password"
+            value={delPw}
+            onChange={(e) => setDelPw(e.target.value)}
+            placeholder="Password to confirm"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-rose-500"
+          />
+          <button type="submit" className="self-start rounded-xl bg-rose-600 px-5 py-2 font-bold text-white transition-colors hover:bg-rose-500">
+            Delete my account
+          </button>
+          {delMsg && <p className="text-sm text-rose-400">{delMsg}</p>}
+        </form>
       </div>
     </main>
   );

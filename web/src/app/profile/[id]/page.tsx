@@ -53,6 +53,21 @@ export default function ProfilePage() {
               <Stat label="Draws" value={profile.stats.draws} accent="text-zinc-300" />
               <Stat label="Losses" value={profile.stats.losses} accent="text-rose-400" />
             </div>
+
+            {profile.pools.length > 0 && (
+              <div className="mt-8">
+                <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-zinc-500">Ratings</h2>
+                <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+                  {profile.pools.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-3 last:border-0">
+                      <span className="capitalize text-zinc-300">{p.variant} · {p.speed}</span>
+                      <span className="flex-1 px-4 text-right text-xs text-zinc-500">{p.games} games</span>
+                      <span className="w-16 text-right font-bold text-blue-400">{p.rating}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

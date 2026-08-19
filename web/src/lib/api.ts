@@ -54,10 +54,25 @@ export interface Board {
   entries: LeaderboardRow[];
 }
 
+export interface PoolRating {
+  variant: string;
+  speed: string;
+  rating: number;
+  games: number;
+}
+
 export interface Profile {
   account: Account;
   rating: number;
   stats: { wins: number; losses: number; draws: number };
+  pools: PoolRating[];
+}
+
+export interface LiveGame {
+  gameId: string;
+  white: string;
+  black: string;
+  variant: string;
 }
 
 export interface GameHistoryRow {
@@ -118,4 +133,9 @@ export const api = {
   gamesActive: (token: string) => request<{ games: ActiveGame[] }>('/games/active', 'GET', undefined, token),
   gameMoves: (id: string) =>
     request<{ gameId: string; plies: Ply[] }>(`/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
+  gamesLive: () => request<{ games: LiveGame[] }>('/games/live', 'GET'),
+  changePassword: (oldPassword: string, newPassword: string, token: string) =>
+    request<{ ok: boolean }>('/account/password', 'POST', { oldPassword, newPassword }, token),
+  deleteAccount: (password: string, token: string) =>
+    request<{ ok: boolean }>('/account/delete', 'POST', { password }, token),
 };
