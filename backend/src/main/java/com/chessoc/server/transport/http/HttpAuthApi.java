@@ -1,6 +1,7 @@
 package com.chessoc.server.transport.http;
 
 import com.chessoc.server.account.Account;
+import com.chessoc.server.domain.Side;
 import com.chessoc.server.domain.Variant;
 import com.chessoc.server.games.GameRecord;
 import com.chessoc.server.match.TimeControl;
@@ -166,8 +167,14 @@ public final class HttpAuthApi {
         Variant variant = Variant.valueOf(b.path("variant").asText("standard").toUpperCase());
         long baseMs = Math.max(1, b.path("minutes").asInt(5)) * 60_000L;
         long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
-        boolean rated = b.path("rated").asBoolean(true);
-        String gameId = s.lobby().create(token.playerId(), variant, TimeControl.fischer(baseMs, incMs), rated);
+        TimeControl tc = TimeControl.fischer(baseMs, incMs);
+        String gameId;
+        if (b.path("vsEngine").asBoolean(false)) {
+            Side humanColor = "black".equalsIgnoreCase(b.path("color").asText("white")) ? Side.BLACK : Side.WHITE;
+            gameId = s.lobby().createVsEngine(token.playerId(), variant, tc, humanColor);
+        } else {
+            gameId = s.lobby().create(token.playerId(), variant, tc, b.path("rated").asBoolean(true));
+        }
         send(x, 200, Map.of("gameId", gameId));
     }
 
@@ -270,6 +277,7 @@ public final class HttpAuthApi {
         for (GameRecord g : s.games().forAccount(me, 25)) {
             String opponentId = me.equals(g.whiteId()) ? g.blackId() : g.whiteId();
             String opponent = opponentId == null ? "?"
+                    : Lobby.ENGINE_ID.equals(opponentId) ? "Computer"
                     : s.accounts().findById(opponentId).map(Account::username).orElse("guest");
             String result = "DRAW".equals(g.resultType()) ? "draw"
                     : me.equals(g.winnerAccountId()) ? "win" : "loss";

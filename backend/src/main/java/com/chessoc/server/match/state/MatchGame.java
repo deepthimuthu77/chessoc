@@ -38,6 +38,7 @@ public final class MatchGame {
     // Capabilities are version-bound (replaced on every new snapshot), so a generous expiry is safe;
     // it must outlast a player's think time.
     private static final long CAPABILITY_TTL_MS = 3_600_000;
+    private static final long AI_MOVE_DELAY_MS = 400;
 
     private final ValidatorClient engine;
     private final MatchRepository repository;
@@ -61,6 +62,8 @@ public final class MatchGame {
     private final List<String> capturedByBlack = new ArrayList<>();
     private final java.util.Set<String> rematchRequests = new java.util.HashSet<>();
     private RematchFactory rematchFactory;
+    private Side aiSide;
+    private AiMover aiMover;
 
     private final boolean rated;
     private final TimeControl timeControl;
@@ -131,6 +134,23 @@ public final class MatchGame {
 
     public void onRematch(RematchFactory factory) {
         this.rematchFactory = factory;
+    }
+
+    /** Picks the engine's reply for an AI game. */
+    public interface AiMover {
+        com.chessoc.server.domain.Uci bestMove(Variant variant, Fen position);
+    }
+
+    /** Mark one side as engine-controlled; the server plays its moves (and moves first if it's White). */
+    public void setAi(Side side, AiMover mover) {
+        lock.lock();
+        try {
+            this.aiSide = side;
+            this.aiMover = mover;
+            maybeScheduleAi();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /** Broadcast a chat line to all subscribers, tagged with the sender's colour. */
@@ -307,6 +327,33 @@ public final class MatchGame {
             rescheduleFlag();
         }
         reissueAllCaps();
+        maybeScheduleAi();
+    }
+
+    private void maybeScheduleAi() {
+        if (result == null && aiSide != null && sideToMove() == aiSide) {
+            scheduler.schedule(this::playAi, AI_MOVE_DELAY_MS);
+        }
+    }
+
+    private void playAi() {
+        lock.lock();
+        try {
+            if (result != null || aiMover == null || sideToMove() != aiSide) {
+                return;
+            }
+            Uci uci = aiMover.bestMove(variant, currentFen);
+            ApplyResult applied = engine.apply(variant, initialFen, moves, uci);
+            if (!applied.legal()) {
+                return;
+            }
+            commitMove(aiSide, uci, applied);
+            broadcastAll();
+        } catch (RuntimeException e) {
+            System.err.println("ai move failed for " + gameId + ": " + e);
+        } finally {
+            lock.unlock();
+        }
     }
 
     private Messages.Result resign(Session session, Messages.Intent intent) {

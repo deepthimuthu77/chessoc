@@ -3,6 +3,8 @@ package com.chessoc.server.match.state;
 import com.chessoc.server.domain.Fen;
 import com.chessoc.server.domain.Side;
 import com.chessoc.server.domain.Variant;
+import com.chessoc.server.engine.SearchBudget;
+import com.chessoc.server.engine.SearchClient;
 import com.chessoc.server.games.GameRecord;
 import com.chessoc.server.games.GamesRepository;
 import com.chessoc.server.match.SpeedBucket;
@@ -24,6 +26,8 @@ public final class Lobby {
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     private static final String CRAZYHOUSE_START =
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 0 1";
+    /** Sentinel account id for the engine opponent. */
+    public static final String ENGINE_ID = "engine";
 
     public record Seat(String gameId, String color) {
     }
@@ -31,17 +35,33 @@ public final class Lobby {
     private final MatchService matches;
     private final RatingService ratings;
     private final GamesRepository games;
+    private final SearchClient engine;
     private final TimeControl casualTimeControl;
     private final LongSupplier clock;
     private final Map<String, String> gameByRoom = new ConcurrentHashMap<>();
 
-    public Lobby(MatchService matches, RatingService ratings, GamesRepository games,
+    public Lobby(MatchService matches, RatingService ratings, GamesRepository games, SearchClient engine,
                  TimeControl casualTimeControl, LongSupplier clock) {
         this.matches = matches;
         this.ratings = ratings;
         this.games = games;
+        this.engine = engine;
         this.casualTimeControl = casualTimeControl;
         this.clock = clock;
+    }
+
+    /** Create a casual game against the engine; the human takes {@code humanColor}, the engine the other. */
+    public synchronized String createVsEngine(String humanId, Variant variant, TimeControl tc, Side humanColor) {
+        String gameId = UUID.randomUUID().toString();
+        Fen start = Fen.parse(variant == Variant.STANDARD ? STANDARD_START : CRAZYHOUSE_START);
+        String whiteId = humanColor == Side.WHITE ? humanId : ENGINE_ID;
+        String blackId = humanColor == Side.WHITE ? ENGINE_ID : humanId;
+        Side aiSide = humanColor == Side.WHITE ? Side.BLACK : Side.WHITE;
+        MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, blackId, tc, false));
+        game.onComplete(result -> onComplete(game, result));
+        game.setAi(aiSide, (v, fen) -> engine.bestMove(v, fen, SearchBudget.movetime(600)).bestMove());
+        gameByRoom.put(gameId, gameId);
+        return gameId;
     }
 
     /** Join a casual room by name: first joiner is White, next distinct joiner claims Black. */

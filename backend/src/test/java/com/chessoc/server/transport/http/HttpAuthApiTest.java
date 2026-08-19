@@ -41,13 +41,13 @@ class HttpAuthApiTest {
     void start() throws IOException {
         Scheduler noop = (task, delay) -> () -> {
         };
-        MatchService matches = new MatchService(new UnavailableEngine(), new InMemoryMatchRepository(),
-                noop, () -> 0L);
+        UnavailableEngine engine = new UnavailableEngine();
+        MatchService matches = new MatchService(engine, new InMemoryMatchRepository(), noop, () -> 0L);
         InMemoryAccountRepository accounts = new InMemoryAccountRepository();
         InMemoryRatingRepository ratings = new InMemoryRatingRepository();
         InMemoryFriendRepository friends = new InMemoryFriendRepository();
         InMemoryGamesRepository games = new InMemoryGamesRepository();
-        Lobby lobby = new Lobby(matches, new RatingService(ratings), games,
+        Lobby lobby = new Lobby(matches, new RatingService(ratings), games, engine,
                 TimeControl.fischer(300_000, 0), () -> 0L);
 
         ApiServices svc = new ApiServices(

@@ -8,10 +8,12 @@ each line notes what it needs and whether the backend already has a foothold. Se
 Priority: **P1** expected next, **P2** valuable, **P3** advanced/infra.
 
 ## Already shipped (for context)
-Accounts (email+password), durable session, home + game create/join, Glicko-2 ratings on rated end,
-global + friends leaderboards, friends + in-memory presence, profile stats, in-game chat, rematch
-(colours swapped), engine-sourced captured pieces + material, game-history list. Runs in Docker
-(Postgres + engine + server), against the real vector64 binary via the engine bridge.
+Accounts (email+password), durable session, home + game create/join, **play vs the engine (choose your
+colour, engine plays the other side)**, Glicko-2 ratings on rated end, global + friends leaderboards,
+friends + in-memory presence, profile stats, in-game chat, rematch (colours swapped), engine-sourced
+captured pieces + material, game-history list, and a chess.com-style board (per-piece legal dots,
+capture rings, last-move highlight). Runs in Docker (Postgres + engine + server), against the real
+vector64 binary via the engine bridge; the in-container dev engine plays a weak 2-ply material AI.
 
 ## Auth & account
 - **OAuth (Google / GitHub)** — P1. Login issues the same session token; add the provider handshake.
@@ -25,15 +27,13 @@ global + friends leaderboards, friends + in-memory presence, profile stats, in-g
 - **Automated quick-match queue** — P1. `MatchmakingService` (queue by variant×speed, pairing) exists
   but is not exposed; add `/seek` + `/seek/cancel` with pairing → game, and a "Quick match" UI.
 - **Open-games / seeks lobby list** — P2. Discoverable open challenges to join.
-- **Play vs AI** — P1. Search tier + engine already exist; wire an AI opponent (server plays best move
-  on the AI side) and a "vs Computer" option.
 - **Resume ongoing games** — P2. `resync` exists; add a "your games" list to rejoin.
 - **Challenge notifications** — P2. Notify the challenged player (needs the notification channel below).
 
 ## In-game UX
 - **Board flip** for the Black player's orientation — P1 (frontend only).
-- **Last-move highlight** + **check indicator** — P1. `inCheck` is known engine-side; surface it in the
-  snapshot and highlight.
+- **Check indicator** — P2. `inCheck` is known engine-side; surface it in the snapshot and highlight the
+  king (per-piece legal dots, capture rings, and last-move highlight already ship).
 - **SAN move list** — P2. Server sends UCI; convert to SAN (engine or a notation helper).
 - **Premoves** — P2. Queue a move for the opponent's turn.
 - **Move sounds** — P2 (frontend only).

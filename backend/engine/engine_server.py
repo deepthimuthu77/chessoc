@@ -53,6 +53,41 @@ def stm(board):
     return "w" if board.turn == chess.WHITE else "b"
 
 
+PIECE_VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
+
+
+def material(board):
+    score = 0
+    for pt, val in PIECE_VAL.items():
+        score += val * (len(board.pieces(pt, chess.WHITE)) - len(board.pieces(pt, chess.BLACK)))
+    return score
+
+
+def negamax(board, depth):
+    if board.is_checkmate():
+        return -1_000_000
+    if board.is_game_over() or depth == 0:
+        return (1 if board.turn == chess.WHITE else -1) * material(board)
+    best = -10 ** 9
+    for m in board.legal_moves:
+        board.push(m)
+        best = max(best, -negamax(board, depth - 1))
+        board.pop()
+    return best
+
+
+def choose_move(board):
+    """Weak 2-ply material search — legal but not strong (see docs on variant AI)."""
+    best, best_score = None, -10 ** 9
+    for m in board.legal_moves:
+        board.push(m)
+        score = -negamax(board, 1)
+        board.pop()
+        if score > best_score:
+            best_score, best = score, m
+    return best
+
+
 class Conn:
     def __init__(self):
         self.variant = "standard"
@@ -78,6 +113,8 @@ class Conn:
             return self._status()
         if line.startswith("canmate"):
             return self._can_mate(line.split()[1])
+        if line.startswith("go"):
+            return self._go()
         return None
 
     def _position(self, tokens):
@@ -115,6 +152,16 @@ class Conn:
             color = chess.WHITE if side == "w" else chess.BLACK
             board = self._board()
             return json.dumps({"canMate": not board.has_insufficient_material(color)})
+        except ValueError as e:
+            return _malformed(e)
+
+    def _go(self):
+        try:
+            board = self._board()
+            move = choose_move(board)
+            if move is None:
+                return json.dumps({"error": "internal_error", "message": "no legal moves"})
+            return json.dumps({"bestMove": move.uci(), "score": {"cp": 0}, "pv": [move.uci()], "depth": 2})
         except ValueError as e:
             return _malformed(e)
 

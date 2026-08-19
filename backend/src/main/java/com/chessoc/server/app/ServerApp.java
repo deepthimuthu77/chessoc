@@ -70,7 +70,7 @@ public final class ServerApp {
         LeaderboardService leaderboard = new LeaderboardService(ratings, accounts);
         AccountService accountService = new AccountService(accounts);
         Presence presence = new Presence();
-        Lobby lobby = new Lobby(matches, ratingService, games, TimeControl.fischer(600_000, 5_000), clock);
+        Lobby lobby = new Lobby(matches, ratingService, games, engine, TimeControl.fischer(600_000, 5_000), clock);
 
         TokenService tokens = new TokenService(config.tokenSecret());
         TicketService tickets = new TicketService(clock, config.ticketTtlMs());
