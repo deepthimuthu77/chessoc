@@ -15,4 +15,7 @@ public interface RatingRepository {
 
     /** Ratings for a specific set of accounts in a pool (friends board). */
     List<RatingRow> among(List<String> accountIds, String variant, String speed);
+
+    /** All pools an account has a rating in (profile breakdown). */
+    List<PoolRating> forAccount(String accountId);
 }

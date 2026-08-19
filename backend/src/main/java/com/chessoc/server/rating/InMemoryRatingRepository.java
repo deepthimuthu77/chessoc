@@ -43,4 +43,16 @@ public final class InMemoryRatingRepository implements RatingRepository {
                 .sorted(Comparator.comparingDouble((RatingRow r) -> r.rating().rating()).reversed())
                 .toList();
     }
+
+    @Override
+    public List<PoolRating> forAccount(String accountId) {
+        return rows.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(accountId + '|'))
+                .map(e -> {
+                    String[] parts = e.getKey().split("\\|");
+                    RatingRow r = e.getValue();
+                    return new PoolRating(parts[1], parts[2], (int) Math.round(r.rating().rating()), r.games());
+                })
+                .toList();
+    }
 }

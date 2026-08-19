@@ -25,6 +25,10 @@ public final class LeaderboardService {
         return decorate(ratings.among(accountIds, variant, speed));
     }
 
+    public List<PoolRating> pools(String accountId) {
+        return ratings.forAccount(accountId);
+    }
+
     private List<LeaderboardEntry> decorate(List<RatingRow> rows) {
         Map<String, String> names = accounts.byIds(rows.stream().map(RatingRow::accountId).toList()).stream()
                 .collect(Collectors.toMap(Account::id, Account::username));

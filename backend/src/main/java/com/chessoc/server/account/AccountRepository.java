@@ -16,4 +16,8 @@ public interface AccountRepository {
 
     /** Usernames for a set of ids, for display (leaderboard, friends). */
     List<Account> byIds(List<String> ids);
+
+    void updatePassword(String id, String passwordHash);
+
+    void delete(String id);
 }

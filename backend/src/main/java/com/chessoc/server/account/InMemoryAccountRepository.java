@@ -40,6 +40,17 @@ public final class InMemoryAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void updatePassword(String id, String passwordHash) {
+        byId.computeIfPresent(id, (k, a) ->
+                new Account(a.id(), a.username(), a.email(), passwordHash, a.createdAtEpochMs()));
+    }
+
+    @Override
+    public void delete(String id) {
+        byId.remove(id);
+    }
+
+    @Override
     public List<Account> byIds(List<String> ids) {
         List<Account> out = new ArrayList<>();
         for (String id : ids) {

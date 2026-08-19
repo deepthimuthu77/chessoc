@@ -10,6 +10,7 @@ import com.chessoc.server.match.state.MatchGame;
 import com.chessoc.server.match.state.PersistedPly;
 import com.chessoc.server.protocol.ProtocolMapper;
 import com.chessoc.server.rating.LeaderboardEntry;
+import com.chessoc.server.rating.PoolRating;
 import com.chessoc.server.session.AuthException;
 import com.chessoc.server.session.SessionToken;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,7 +57,10 @@ public final class HttpAuthApi {
         route("/profile", this::profile);
         route("/games/mine", this::gamesMine);
         route("/games/active", this::gamesActive);
+        route("/games/live", this::gamesLive);
         route("/game/moves", this::gameMoves);
+        route("/account/password", this::changePassword);
+        route("/account/delete", this::deleteAccount);
         server.setExecutor(Executors.newCachedThreadPool());
     }
 
@@ -262,13 +266,23 @@ public final class HttpAuthApi {
         var stats = s.games().statsFor(a.id());
         List<LeaderboardEntry> mine = s.leaderboard().among(List.of(a.id()), "standard", "blitz");
         int rating = mine.isEmpty() ? 1500 : mine.get(0).rating();
+        List<Map<String, Object>> pools = new ArrayList<>();
+        for (PoolRating pr : s.leaderboard().pools(a.id())) {
+            Map<String, Object> pool = new LinkedHashMap<>();
+            pool.put("variant", pr.variant());
+            pool.put("speed", pr.speed());
+            pool.put("rating", pr.rating());
+            pool.put("games", pr.games());
+            pools.add(pool);
+        }
         Map<String, Object> account = new LinkedHashMap<>();
         account.put("id", a.id());
         account.put("username", a.username());
         send(x, 200, Map.of(
                 "account", account,
                 "rating", rating,
-                "stats", Map.of("wins", stats.wins(), "losses", stats.losses(), "draws", stats.draws())));
+                "stats", Map.of("wins", stats.wins(), "losses", stats.losses(), "draws", stats.draws()),
+                "pools", pools));
     }
 
     private void gamesMine(HttpExchange x) throws IOException {
@@ -334,6 +348,60 @@ public final class HttpAuthApi {
             plies.add(row);
         }
         send(x, 200, Map.of("gameId", gameId, "plies", plies));
+    }
+
+    private void gamesLive(HttpExchange x) throws IOException {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (MatchGame g : s.matches().liveGames()) {
+            if (g.blackId() == null) {
+                continue; // still waiting for an opponent
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("gameId", g.gameId());
+            row.put("white", displayName(g.whiteId()));
+            row.put("black", displayName(g.blackId()));
+            row.put("variant", g.variant().name().toLowerCase());
+            out.add(row);
+        }
+        send(x, 200, Map.of("games", out));
+    }
+
+    private void changePassword(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        JsonNode b = read(x);
+        try {
+            s.accountService().changePassword(token.playerId(),
+                    b.path("oldPassword").asText(), b.path("newPassword").asText());
+            send(x, 200, Map.of("ok", true));
+        } catch (AuthException e) {
+            send(x, 400, Map.of("error", e.getMessage()));
+        }
+    }
+
+    private void deleteAccount(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        try {
+            s.accountService().deleteAccount(token.playerId(), read(x).path("password").asText());
+            send(x, 200, Map.of("ok", true));
+        } catch (AuthException e) {
+            send(x, 400, Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String displayName(String id) {
+        if (id == null) {
+            return "waiting";
+        }
+        if (Lobby.ENGINE_ID.equals(id)) {
+            return "Computer";
+        }
+        return s.accounts().findById(id).map(Account::username).orElse("guest");
     }
 
     // ---- plumbing ----

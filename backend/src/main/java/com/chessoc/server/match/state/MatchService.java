@@ -47,4 +47,9 @@ public final class MatchService {
                 .filter(g -> (accountId.equals(g.whiteId()) || accountId.equals(g.blackId())) && !g.isOver())
                 .toList();
     }
+
+    /** All live (unfinished) games — for spectator discovery. */
+    public java.util.List<MatchGame> liveGames() {
+        return games.values().stream().filter(g -> !g.isOver()).toList();
+    }
 }

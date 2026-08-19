@@ -50,4 +50,23 @@ public final class AccountService {
         }
         return account;
     }
+
+    public void changePassword(String accountId, String oldPassword, String newPassword) {
+        Account account = accounts.findById(accountId).orElseThrow(() -> new AuthException("no such account"));
+        if (!PasswordHasher.verify(oldPassword, account.passwordHash())) {
+            throw new AuthException("current password is wrong");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new AuthException("new password must be at least 6 characters");
+        }
+        accounts.updatePassword(accountId, PasswordHasher.hash(newPassword));
+    }
+
+    public void deleteAccount(String accountId, String password) {
+        Account account = accounts.findById(accountId).orElseThrow(() -> new AuthException("no such account"));
+        if (!PasswordHasher.verify(password, account.passwordHash())) {
+            throw new AuthException("wrong password");
+        }
+        accounts.delete(accountId);
+    }
 }

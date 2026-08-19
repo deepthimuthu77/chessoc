@@ -58,6 +58,29 @@ public final class PostgresAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void updatePassword(String id, String passwordHash) {
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement("UPDATE accounts SET password_hash=? WHERE id=?")) {
+            ps.setString(1, passwordHash);
+            ps.setString(2, id);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("password update failed", e);
+        }
+    }
+
+    @Override
+    public void delete(String id) {
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM accounts WHERE id=?")) {
+            ps.setString(1, id);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("account delete failed", e);
+        }
+    }
+
+    @Override
     public List<Account> byIds(List<String> ids) {
         if (ids.isEmpty()) {
             return List.of();

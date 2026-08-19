@@ -108,6 +108,25 @@ public final class PostgresRatingRepository implements RatingRepository {
         }
     }
 
+    @Override
+    public List<PoolRating> forAccount(String accountId) {
+        List<PoolRating> out = new ArrayList<>();
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT variant, speed, rating, games FROM ratings WHERE account_id=? ORDER BY rating DESC")) {
+            ps.setString(1, accountId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new PoolRating(rs.getString(1), rs.getString(2),
+                            (int) Math.round(rs.getDouble(3)), rs.getInt(4)));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("forAccount failed", e);
+        }
+        return out;
+    }
+
     private static List<RatingRow> readRows(PreparedStatement ps) throws SQLException {
         List<RatingRow> out = new ArrayList<>();
         try (ResultSet rs = ps.executeQuery()) {
