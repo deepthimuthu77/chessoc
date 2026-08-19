@@ -4,10 +4,12 @@
 
 import {
   Capability,
+  ChatMessage,
   Envelope,
   ErrorMessage,
   GameSnapshot,
   MessageType,
+  RematchReady,
   ResultMessage,
   SnapshotMessage,
 } from './protocol';
@@ -20,6 +22,8 @@ export interface GameState {
   version: number;
   pendingIntentId: string | null;
   error: string | null;
+  chat: ChatMessage[];
+  rematchGameId: string | null;
 }
 
 export const initialState: GameState = {
@@ -29,6 +33,8 @@ export const initialState: GameState = {
   version: -1,
   pendingIntentId: null,
   error: null,
+  chat: [],
+  rematchGameId: null,
 };
 
 export type Action =
@@ -78,6 +84,14 @@ export function reducer(state: GameState, action: Action): GameState {
         case MessageType.Error: {
           const m = env.payload as ErrorMessage;
           return { ...state, error: m.message };
+        }
+        case MessageType.Chat: {
+          const m = env.payload as ChatMessage;
+          return { ...state, chat: [...state.chat, m] };
+        }
+        case MessageType.RematchReady: {
+          const m = env.payload as RematchReady;
+          return { ...state, rematchGameId: m.gameId };
         }
         default:
           return state;

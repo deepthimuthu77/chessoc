@@ -1,8 +1,10 @@
 "use client";
 
-import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Board } from '@/components/ui/Board';
 import { CapturedPieces } from '@/components/ui/CapturedPieces';
+import { Chat } from '@/components/ui/Chat';
 import { ConnectionOverlay } from '@/components/ui/ConnectionOverlay';
 import { GameControls } from '@/components/ui/GameControls';
 import { GameOverModal } from '@/components/ui/GameOverModal';
@@ -12,15 +14,23 @@ import { useGame } from '@/hooks/use-game';
 
 export default function RoomPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const game = useGame(params.id);
+
+  // both players accepted a rematch — the server created the new game
+  useEffect(() => {
+    if (game.rematchGameId) {
+      router.push(`/room/${game.rematchGameId}`);
+    }
+  }, [game.rematchGameId, router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 md:p-8">
       <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
         <div className="flex w-full max-w-md flex-col space-y-6 xl:w-80">
-          <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} />
+          <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} captured={game.opponent.captured} score={game.opponent.score} />
           <MoveHistory history={game.history} />
-          <PlayerPanel label="You" name={game.you.name} clock={game.you.clock} highlighted />
+          <PlayerPanel label="You" name={game.you.name} clock={game.you.clock} captured={game.you.captured} score={game.you.score} highlighted />
           <GameControls
             active={game.active}
             canOfferDraw={game.canOfferDraw}
@@ -29,6 +39,7 @@ export default function RoomPage() {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
+          <Chat messages={game.chat} onSend={game.sendChat} />
         </div>
 
         <div className="relative flex w-full max-w-2xl flex-col items-center">
@@ -50,7 +61,11 @@ export default function RoomPage() {
             </div>
           )}
           {game.connected && <ConnectionOverlay status={game.status} />}
-          <GameOverModal isOpen={!!game.result} result={game.result} />
+          <GameOverModal
+            isOpen={!!game.result}
+            result={game.result}
+            onRematch={game.canRematch ? game.rematch : undefined}
+          />
           <PromotionPicker
             open={!!game.promotion}
             color={game.promotionColor}
@@ -67,11 +82,15 @@ function PlayerPanel({
   label,
   name,
   clock,
+  captured,
+  score,
   highlighted = false,
 }: {
   label: string;
   name: string;
   clock: string;
+  captured: string[];
+  score: number;
   highlighted?: boolean;
 }) {
   return (
@@ -89,7 +108,7 @@ function PlayerPanel({
         </div>
         <div className="font-mono text-3xl text-zinc-600">{clock}</div>
       </div>
-      <CapturedPieces pieces={[]} score={0} />
+      <CapturedPieces pieces={captured} score={score} />
     </div>
   );
 }

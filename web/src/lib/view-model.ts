@@ -60,6 +60,13 @@ export const findDrawResponse = (caps: Capability[], accept: boolean) =>
   caps.find((c) => c.kind === 'respond_draw' && c.params.accept === String(accept));
 export const findRematch = (caps: Capability[]) => caps.find((c) => c.kind === 'rematch');
 
+const PIECE_VALUE: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+
+/** Material worth of a captured-piece list (presentation transform over server-provided data). */
+export function materialScore(pieces: string[]): number {
+  return pieces.reduce((sum, p) => sum + (PIECE_VALUE[p.toLowerCase()] ?? 0), 0);
+}
+
 export function formatClock(ms: number): string {
   const total = Math.floor(Math.max(0, ms) / 1000);
   return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`;

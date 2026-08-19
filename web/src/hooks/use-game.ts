@@ -19,6 +19,7 @@ import {
   findRematch,
   findResign,
   legalTargets,
+  materialScore,
   promotionChoices,
   toModalResult,
 } from '@/lib/view-model';
@@ -102,6 +103,11 @@ export function useGame(room: string) {
     });
   }, []);
 
+  const sendChat = useCallback((text: string) => {
+    if (!transportRef.current || !text.trim()) return;
+    transportRef.current.send(MessageType.Chat, { text: text.trim() });
+  }, []);
+
   const commitMove = useCallback(
     (cap: Capability | undefined) => {
       if (!cap || state.pendingIntentId) return;
@@ -165,6 +171,12 @@ export function useGame(room: string) {
     : { white: '--:--', black: '--:--' };
   const other: Color = myColor === 'black' ? 'white' : 'black';
 
+  const iAmBlack = myColor === 'black';
+  const youCaptured = iAmBlack ? snapshot?.capturedByBlack ?? [] : snapshot?.capturedByWhite ?? [];
+  const oppCaptured = iAmBlack ? snapshot?.capturedByWhite ?? [] : snapshot?.capturedByBlack ?? [];
+  const youMaterial = materialScore(youCaptured);
+  const oppMaterial = materialScore(oppCaptured);
+
   const caps = state.capabilities;
   const has = (kind: Capability['kind']) => caps.some((c) => c.kind === kind);
   const active = state.connection === 'connected' && !!snapshot && !snapshot.result && isPlayer;
@@ -187,14 +199,28 @@ export function useGame(room: string) {
     interactive,
     history: snapshot?.moves ?? [],
     result: snapshot?.result ? toModalResult(snapshot.result) : undefined,
-    you: { name: myColor ? capitalize(myColor) : 'Spectator', clock: myColor === 'black' ? clocks.black : clocks.white },
-    opponent: { name: myColor ? capitalize(other) : 'Opponent', clock: myColor === 'black' ? clocks.white : clocks.black },
+    you: {
+      name: myColor ? capitalize(myColor) : 'Spectator',
+      clock: myColor === 'black' ? clocks.black : clocks.white,
+      captured: youCaptured,
+      score: Math.max(0, youMaterial - oppMaterial),
+    },
+    opponent: {
+      name: myColor ? capitalize(other) : 'Opponent',
+      clock: myColor === 'black' ? clocks.white : clocks.black,
+      captured: oppCaptured,
+      score: Math.max(0, oppMaterial - youMaterial),
+    },
+    // chat
+    chat: state.chat,
+    sendChat,
     // actions
     sendMove,
     resign,
     offerDraw,
     respondDraw,
     rematch,
+    rematchGameId: state.rematchGameId,
     // control state
     active,
     canOfferDraw: active && has('offer_draw'),

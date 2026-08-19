@@ -10,6 +10,7 @@ export const MessageType = {
   Intent: 'intent',
   Resync: 'resync',
   Ping: 'ping',
+  Chat: 'chat',
   Snapshot: 'snapshot',
   Capabilities: 'capabilities',
   Receipt: 'receipt',
@@ -18,7 +19,18 @@ export const MessageType = {
   ResyncOk: 'resync_ok',
   Error: 'error',
   Pong: 'pong',
+  RematchReady: 'rematch_ready',
 } as const;
+
+export interface ChatMessage {
+  color: 'white' | 'black' | 'spectator';
+  text: string;
+  serverTimestamp: number;
+}
+
+export interface RematchReady {
+  gameId: string;
+}
 
 export interface Envelope {
   v: ProtocolVersion;
@@ -61,6 +73,8 @@ export interface GameSnapshot {
   result: GameResult | null;
   whitePlayerId: string;
   blackPlayerId: string;
+  capturedByWhite: string[];
+  capturedByBlack: string[];
 }
 
 export interface SnapshotMessage {

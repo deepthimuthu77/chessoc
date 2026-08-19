@@ -60,6 +60,16 @@ export interface Profile {
   stats: { wins: number; losses: number; draws: number };
 }
 
+export interface GameHistoryRow {
+  gameId: string;
+  opponent: string;
+  result: 'win' | 'loss' | 'draw';
+  reason: string;
+  rated: boolean;
+  variant: string;
+  endedAt: number;
+}
+
 export interface CreateOptions {
   variant?: string;
   minutes?: number;
@@ -90,4 +100,5 @@ export const api = {
     request<Board>(`/leaderboard/friends?variant=${variant}&speed=${speed}`, 'GET', undefined, token),
 
   profile: (id: string) => request<Profile>(`/profile?id=${encodeURIComponent(id)}`, 'GET'),
+  gamesMine: (token: string) => request<{ games: GameHistoryRow[] }>('/games/mine', 'GET', undefined, token),
 };
