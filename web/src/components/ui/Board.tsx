@@ -11,25 +11,41 @@ interface BoardProps {
   /** Legal destinations per source square (from the server's move capabilities). */
   legalMoves?: Record<string, string[]>;
   lastMove?: { from: string; to: string } | null;
+  checkSquare?: string | null;
+  orientation?: 'white' | 'black';
   interactive?: boolean;
   onMoveIntent?: (from: string, to: string) => void;
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
+function squareAt(col: number, row: number, flip: boolean): string {
+  const file = flip ? 7 - col : col;
+  const rank = flip ? row + 1 : 8 - row;
+  return `${FILES[file]}${rank}`;
+}
+
+function gridOf(square: string, flip: boolean): { col: number; row: number } {
+  const f = FILES.indexOf(square[0]);
+  const r = Number(square[1]);
+  return flip ? { col: 7 - f, row: r - 1 } : { col: f, row: 8 - r };
+}
+
 export function Board({
   pieces,
   legalMoves = {},
   lastMove = null,
+  checkSquare = null,
+  orientation = 'white',
   interactive = false,
   onMoveIntent,
 }: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const flip = orientation === 'black';
 
   const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
-  const targets = selectedSquare ? legalMoves[selectedSquare] ?? [] : [];
-  const targetSet = new Set(targets);
+  const targetSet = new Set(selectedSquare ? legalMoves[selectedSquare] ?? [] : []);
 
   function attemptMove(fromSquare: string, toSquare: string) {
     const legal = (legalMoves[fromSquare] ?? []).includes(toSquare);
@@ -41,7 +57,6 @@ export function Board({
     setSelectedSquare(null);
   }
 
-  // a click on a piece captures (if it sits on a legal target) or selects it; a drag always selects
   function handlePieceClick(square: string, isDrag = false) {
     if (!interactive) return;
     if (!isDrag && selectedSquare && targetSet.has(square)) {
@@ -53,19 +68,16 @@ export function Board({
 
   function handleDrop(fromSquare: string, point: { x: number; y: number }) {
     if (!boardRef.current || !interactive) return;
-
     const rect = boardRef.current.getBoundingClientRect();
     const x = point.x - rect.left;
     const y = point.y - rect.top;
-
     if (x < 0 || x >= rect.width || y < 0 || y >= rect.height) {
       setSelectedSquare(null);
       return;
     }
-
     const col = Math.floor((x / rect.width) * 8);
     const row = Math.floor((y / rect.height) * 8);
-    attemptMove(fromSquare, `${FILES[col]}${8 - row}`);
+    attemptMove(fromSquare, squareAt(col, row, flip));
   }
 
   return (
@@ -77,12 +89,13 @@ export function Board({
       {Array.from({ length: 64 }, (_, index) => {
         const row = Math.floor(index / 8);
         const col = index % 8;
-        const square = `${FILES[col]}${8 - row}`;
+        const square = squareAt(col, row, flip);
         const isDark = (row + col) % 2 === 1;
         const isSelected = selectedSquare === square;
         const isTarget = selectedSquare !== null && targetSet.has(square);
         const isCapture = isTarget && occupied.has(square);
         const isLast = lastMove !== null && (square === lastMove.from || square === lastMove.to);
+        const isCheck = checkSquare === square;
 
         return (
           <button
@@ -95,6 +108,12 @@ export function Board({
           >
             {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}
             {isSelected && <span className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
+            {isCheck && (
+              <span
+                className="pointer-events-none absolute inset-0"
+                style={{ background: 'radial-gradient(circle, rgba(220,38,38,0.75) 0%, rgba(220,38,38,0) 70%)' }}
+              />
+            )}
             {isTarget && !isCapture && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="h-1/3 w-1/3 rounded-full bg-black/25" />
@@ -105,12 +124,12 @@ export function Board({
             )}
             {col === 0 && (
               <span className={`absolute left-1 top-1 text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                {8 - row}
+                {square[1]}
               </span>
             )}
             {row === 7 && (
               <span className={`absolute bottom-1 right-1 text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                {FILES[col]}
+                {square[0]}
               </span>
             )}
           </button>
@@ -120,9 +139,7 @@ export function Board({
       <div className="pointer-events-none absolute inset-0">
         <div className="pointer-events-auto relative h-full w-full">
           {pieces.map(({ char, square }) => {
-            const col = FILES.indexOf(square[0]);
-            const row = 8 - Number(square[1]);
-
+            const { col, row } = gridOf(square, flip);
             return (
               <Piece
                 key={`${char}-${square}`}

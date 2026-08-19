@@ -70,6 +70,18 @@ export interface GameHistoryRow {
   endedAt: number;
 }
 
+export interface ActiveGame {
+  gameId: string;
+  color: string;
+  opponent: string;
+}
+
+export interface Ply {
+  version: number;
+  uci: string;
+  fen: string;
+}
+
 export interface CreateOptions {
   variant?: string;
   minutes?: number;
@@ -103,4 +115,7 @@ export const api = {
 
   profile: (id: string) => request<Profile>(`/profile?id=${encodeURIComponent(id)}`, 'GET'),
   gamesMine: (token: string) => request<{ games: GameHistoryRow[] }>('/games/mine', 'GET', undefined, token),
+  gamesActive: (token: string) => request<{ games: ActiveGame[] }>('/games/active', 'GET', undefined, token),
+  gameMoves: (id: string) =>
+    request<{ gameId: string; plies: Ply[] }>(`/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
 };

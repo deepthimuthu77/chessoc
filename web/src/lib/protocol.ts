@@ -73,6 +73,7 @@ export interface GameSnapshot {
   result: GameResult | null;
   whitePlayerId: string;
   blackPlayerId: string;
+  inCheck: boolean;
   capturedByWhite: string[];
   capturedByBlack: string[];
 }

@@ -7,6 +7,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { getAuth } from '@/lib/auth';
+import { getSettings } from '@/lib/settings';
+import { playMoveSound } from '@/lib/sound';
 import { Capability, MessageType, type Color } from '@/lib/protocol';
 import { initialState, reducer } from '@/lib/store';
 import { LiveTransport } from '@/lib/transport';
@@ -41,6 +43,7 @@ export function useGame(room: string) {
 
   const transportRef = useRef<LiveTransport | null>(null);
   const versionRef = useRef<number>(0);
+  const prevMovesRef = useRef(0);
 
   useEffect(() => {
     versionRef.current = Math.max(0, state.version);
@@ -94,6 +97,15 @@ export function useGame(room: string) {
     return () => clearInterval(id);
   }, []);
 
+  // play a tick whenever a new move lands
+  useEffect(() => {
+    const len = state.projection?.moves.length ?? 0;
+    if (len > prevMovesRef.current && getSettings().sounds) {
+      playMoveSound();
+    }
+    prevMovesRef.current = len;
+  }, [state.projection]);
+
   const send = useCallback((cap: Capability | undefined) => {
     if (!cap || !transportRef.current) return;
     transportRef.current.send(MessageType.Intent, {
@@ -128,7 +140,7 @@ export function useGame(room: string) {
     (from: string, to: string) => {
       if (state.pendingIntentId) return;
       const choices = promotionChoices(state.capabilities, from, to);
-      if (choices.length > 1) {
+      if (choices.length > 1 && !getSettings().autoQueen) {
         setPromotion({ from, to }); // let the player pick the piece
         return;
       }
@@ -167,6 +179,12 @@ export function useGame(room: string) {
     [state.capabilities, interactive],
   );
   const lastMove = useMemo(() => (snapshot ? lastMoveSquares(snapshot.moves) : null), [snapshot]);
+  const checkSquare = useMemo(() => {
+    if (!snapshot || !snapshot.inCheck) return null;
+    const kingChar = snapshot.sideToMove === 'white' ? 'K' : 'k';
+    return pieces.find((p) => p.char === kingChar)?.square ?? null;
+  }, [snapshot, pieces]);
+  const orientation: 'white' | 'black' = getSettings().autoFlip && myColor === 'black' ? 'black' : 'white';
 
   const clocks = snapshot
     ? displayClocks(snapshot.clockSample, receivedAt, !snapshot.result)
@@ -201,6 +219,8 @@ export function useGame(room: string) {
     pieces,
     legalMoves,
     lastMove,
+    checkSquare,
+    orientation,
     interactive,
     history: snapshot?.moves ?? [],
     result: snapshot?.result ? toModalResult(snapshot.result) : undefined,
@@ -230,6 +250,7 @@ export function useGame(room: string) {
     active,
     canOfferDraw: active && has('offer_draw'),
     drawOffer,
+    confirmResign: getSettings().confirmResign,
     canRematch: has('rematch'),
     promotion,
     promotionColor: (myColor ?? 'white') as Color,

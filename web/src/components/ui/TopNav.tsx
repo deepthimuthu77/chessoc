@@ -8,6 +8,7 @@ const LINKS = [
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/friends', label: 'Friends' },
   { href: '/history', label: 'History' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 export function TopNav({ username, accountId, onLogout }: { username?: string; accountId?: string; onLogout?: () => void }) {

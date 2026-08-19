@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, type GameHistoryRow } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
@@ -39,7 +40,11 @@ export default function HistoryPage() {
             </div>
           ) : (
             games.map((g) => (
-              <div key={g.gameId} className="flex items-center gap-4 border-b border-zinc-800/70 px-6 py-3 last:border-0">
+              <Link
+                key={g.gameId}
+                href={`/review/${g.gameId}`}
+                className="flex items-center gap-4 border-b border-zinc-800/70 px-6 py-3 transition-colors last:border-0 hover:bg-zinc-800/40"
+              >
                 <span className={`w-14 text-sm font-bold uppercase ${RESULT_STYLE[g.result]}`}>{g.result}</span>
                 <div className="flex-1">
                   <span className="text-zinc-100">vs {g.opponent}</span>
@@ -49,7 +54,7 @@ export default function HistoryPage() {
                 <span className="w-24 text-right text-xs text-zinc-600">
                   {new Date(g.endedAt).toLocaleDateString()}
                 </span>
-              </div>
+              </Link>
             ))
           )}
         </div>

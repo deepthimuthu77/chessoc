@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { api } from '@/lib/api';
+import { api, type ActiveGame } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 
@@ -25,6 +25,13 @@ export default function HomePage() {
   const [color, setColor] = useState<'white' | 'black'>('white');
   const [room, setRoom] = useState('');
   const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState<ActiveGame[]>([]);
+
+  useEffect(() => {
+    if (token) {
+      api.gamesActive(token).then((r) => setActive(r.games)).catch(() => setActive([]));
+    }
+  }, [token]);
 
   if (!ready || !account || !token) {
     return <main className="min-h-screen bg-slate-950" />;
@@ -54,6 +61,27 @@ export default function HomePage() {
           </h1>
           <p className="mt-1 text-zinc-500">Choose a time control, then pick an opponent.</p>
         </motion.div>
+
+        {active.length > 0 && (
+          <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
+            <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Continue playing</h2>
+            <div className="flex flex-col gap-2">
+              {active.map((g) => (
+                <button
+                  key={g.gameId}
+                  type="button"
+                  onClick={() => router.push(`/room/${g.gameId}`)}
+                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left transition-colors hover:border-zinc-700"
+                >
+                  <span className="text-zinc-200">
+                    vs {g.opponent} <span className="text-xs text-zinc-500">({g.color})</span>
+                  </span>
+                  <span className="text-sm font-bold text-blue-400">Resume</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
           <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Time control</h2>

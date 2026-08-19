@@ -6,6 +6,7 @@ interface GameControlsProps {
   active: boolean;
   canOfferDraw: boolean;
   drawOffer: 'none' | 'incoming' | 'sent';
+  requireConfirm?: boolean;
   onResign: () => void;
   onOfferDraw: () => void;
   onRespondDraw: (accept: boolean) => void;
@@ -15,6 +16,7 @@ export function GameControls({
   active,
   canOfferDraw,
   drawOffer,
+  requireConfirm = true,
   onResign,
   onOfferDraw,
   onRespondDraw,
@@ -60,7 +62,9 @@ export function GameControls({
       <button
         type="button"
         onClick={() => {
-          if (confirmResign) {
+          if (!requireConfirm) {
+            onResign();
+          } else if (confirmResign) {
             onResign();
             setConfirmResign(false);
           } else {

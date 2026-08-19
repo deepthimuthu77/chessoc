@@ -35,6 +35,7 @@ export default function RoomPage() {
             active={game.active}
             canOfferDraw={game.canOfferDraw}
             drawOffer={game.drawOffer}
+            requireConfirm={game.confirmResign}
             onResign={game.resign}
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
@@ -47,6 +48,8 @@ export default function RoomPage() {
             pieces={game.pieces}
             legalMoves={game.legalMoves}
             lastMove={game.lastMove}
+            checkSquare={game.checkSquare}
+            orientation={game.orientation}
             interactive={game.interactive}
             onMoveIntent={game.sendMove}
           />
