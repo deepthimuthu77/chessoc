@@ -11,6 +11,7 @@ public final class MessageType {
     public static final String INTENT = "intent";
     public static final String RESYNC = "resync";
     public static final String PING = "ping";
+    public static final String CHAT = "chat"; // both directions
 
     // server -> client
     public static final String AUTH_OK = "auth_ok";
@@ -23,4 +24,5 @@ public final class MessageType {
     public static final String RESYNC_OK = "resync_ok";
     public static final String ERROR = "error";
     public static final String PONG = "pong";
+    public static final String REMATCH_READY = "rematch_ready";
 }

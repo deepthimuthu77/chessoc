@@ -28,6 +28,9 @@ public final class Messages {
     public record Ping() {
     }
 
+    public record ChatIn(String text) {
+    }
+
     // ---- server -> client ----
 
     public record AuthOk(String sessionId, String playerId, String connectionId) {
@@ -60,5 +63,11 @@ public final class Messages {
     }
 
     public record Pong() {
+    }
+
+    public record Chat(String color, String text, long serverTimestamp) {
+    }
+
+    public record RematchReady(String gameId) {
     }
 }

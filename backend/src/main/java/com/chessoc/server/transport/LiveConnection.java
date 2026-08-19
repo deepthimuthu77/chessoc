@@ -49,6 +49,7 @@ public final class LiveConnection implements OutboundSink {
                 game.resync(session.playerId(), resync.lastKnownVersion());
             }
             case MessageType.PING -> send(MessageType.PONG, new Messages.Pong());
+            case MessageType.CHAT -> game.chat(session, codec.payload(envelope, Messages.ChatIn.class).text());
             default -> send(MessageType.ERROR, new Messages.Error("unsupported_type", envelope.type()));
         }
     }

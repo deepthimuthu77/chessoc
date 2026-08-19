@@ -6,7 +6,10 @@ import com.chessoc.server.domain.Uci;
 import java.util.List;
 import java.util.Optional;
 
-/** The authoritative game projection the client renders. Version never decreases. */
+/**
+ * The authoritative game projection the client renders. Version never decreases. Captured pieces are
+ * engine-sourced (from each move's capturedDropType), never recomputed by the client.
+ */
 public record GameSnapshot(
         String gameId,
         long version,
@@ -17,9 +20,13 @@ public record GameSnapshot(
         ClockSample clockSample,
         Optional<GameResult> result,
         String whitePlayerId,
-        String blackPlayerId) {
+        String blackPlayerId,
+        List<String> capturedByWhite,
+        List<String> capturedByBlack) {
 
     public GameSnapshot {
         moves = moves == null ? List.of() : List.copyOf(moves);
+        capturedByWhite = capturedByWhite == null ? List.of() : List.copyOf(capturedByWhite);
+        capturedByBlack = capturedByBlack == null ? List.of() : List.copyOf(capturedByBlack);
     }
 }

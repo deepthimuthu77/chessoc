@@ -2,6 +2,7 @@ package com.chessoc.server.transport.http;
 
 import com.chessoc.server.account.Account;
 import com.chessoc.server.domain.Variant;
+import com.chessoc.server.games.GameRecord;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.protocol.ProtocolMapper;
@@ -50,6 +51,7 @@ public final class HttpAuthApi {
         route("/leaderboard/friends", this::leaderboardFriends);
         route("/leaderboard", this::leaderboard);
         route("/profile", this::profile);
+        route("/games/mine", this::gamesMine);
         server.setExecutor(Executors.newCachedThreadPool());
     }
 
@@ -256,6 +258,32 @@ public final class HttpAuthApi {
                 "account", account,
                 "rating", rating,
                 "stats", Map.of("wins", stats.wins(), "losses", stats.losses(), "draws", stats.draws())));
+    }
+
+    private void gamesMine(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String me = token.playerId();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (GameRecord g : s.games().forAccount(me, 25)) {
+            String opponentId = me.equals(g.whiteId()) ? g.blackId() : g.whiteId();
+            String opponent = opponentId == null ? "?"
+                    : s.accounts().findById(opponentId).map(Account::username).orElse("guest");
+            String result = "DRAW".equals(g.resultType()) ? "draw"
+                    : me.equals(g.winnerAccountId()) ? "win" : "loss";
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("gameId", g.id());
+            row.put("opponent", opponent);
+            row.put("result", result);
+            row.put("reason", g.reason());
+            row.put("rated", g.rated());
+            row.put("variant", g.variant());
+            row.put("endedAt", g.endedAtEpochMs());
+            out.add(row);
+        }
+        send(x, 200, Map.of("games", out));
     }
 
     // ---- plumbing ----

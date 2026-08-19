@@ -57,6 +57,10 @@ public final class MatchGame {
     private final Map<String, Subscriber> subscribers = new LinkedHashMap<>();
     private final Map<String, Capability> currentCaps = new HashMap<>();
     private final Map<String, Messages.Result> resultByIntent = new HashMap<>();
+    private final List<String> capturedByWhite = new ArrayList<>();
+    private final List<String> capturedByBlack = new ArrayList<>();
+    private final java.util.Set<String> rematchRequests = new java.util.HashSet<>();
+    private RematchFactory rematchFactory;
 
     private final boolean rated;
     private final TimeControl timeControl;
@@ -118,6 +122,37 @@ public final class MatchGame {
     /** Fired once when the game ends (terminal, resign, draw, timeout). */
     public void onComplete(java.util.function.Consumer<GameResult> listener) {
         this.completionListener = listener;
+    }
+
+    /** Creates the rematch game (colours swapped) once both players accept. */
+    public interface RematchFactory {
+        String create(String whiteId, String blackId, Variant variant, TimeControl timeControl, boolean rated);
+    }
+
+    public void onRematch(RematchFactory factory) {
+        this.rematchFactory = factory;
+    }
+
+    /** Broadcast a chat line to all subscribers, tagged with the sender's colour. */
+    public void chat(Session session, String text) {
+        lock.lock();
+        try {
+            if (text == null || text.isBlank()) {
+                return;
+            }
+            String body = text.strip();
+            if (body.length() > 500) {
+                body = body.substring(0, 500);
+            }
+            Side side = playerSide(session.playerId());
+            String color = side == null ? "spectator" : side.name().toLowerCase();
+            Messages.Chat message = new Messages.Chat(color, body, now());
+            for (Subscriber sub : subscribers.values()) {
+                sub.sink().send(MessageType.CHAT, message);
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     /** Resolve the caller's colour, claiming the open Black seat on first distinct joiner. */
@@ -210,8 +245,23 @@ public final class MatchGame {
             case RESIGN -> resign(session, intent);
             case OFFER_DRAW -> offerDraw(session, intent);
             case RESPOND_DRAW -> respondDraw(session, intent, cap);
-            case REMATCH -> reject(intent, "rematch_not_supported_v1");
+            case REMATCH -> rematch(session, intent);
         };
+    }
+
+    private Messages.Result rematch(Session session, Messages.Intent intent) {
+        if (playerSide(session.playerId()) == null || result == null || rematchFactory == null) {
+            return reject(intent, "rematch_unavailable");
+        }
+        rematchRequests.add(session.playerId());
+        if (blackId != null && rematchRequests.contains(whiteId) && rematchRequests.contains(blackId)) {
+            String newGameId = rematchFactory.create(blackId, whiteId, variant, timeControl, rated); // swap colours
+            rematchRequests.clear();
+            for (Subscriber sub : subscribers.values()) {
+                sub.sink().send(MessageType.REMATCH_READY, new Messages.RematchReady(newGameId));
+            }
+        }
+        return accepted(intent, session.playerId());
     }
 
     private Messages.Result move(Session session, Messages.Intent intent, Capability cap) {
@@ -238,6 +288,14 @@ public final class MatchGame {
         currentFen = applied.resultingPosition().orElseThrow();
         moves.add(uci);
         version++;
+        applied.capturedDropType().ifPresent(pt -> {
+            // the mover captured an opponent piece; render it in the opponent's colour
+            if (mover == Side.WHITE) {
+                capturedByWhite.add(String.valueOf(pt.symbol()));
+            } else {
+                capturedByBlack.add(String.valueOf(Character.toUpperCase(pt.symbol())));
+            }
+        });
         repository.append(gameId, new PersistedPly(version, currentFen, uci));
 
         if (clocks.get(mover).flagged()) {
@@ -468,7 +526,7 @@ public final class MatchGame {
         ClockSample sample = new ClockSample(white, black, sideToMove(), now);
         return new GameSnapshot(gameId, version, initialFen, currentFen, sideToMove(),
                 List.copyOf(moves), sample, Optional.ofNullable(result), whiteId,
-                blackId == null ? "" : blackId);
+                blackId == null ? "" : blackId, List.copyOf(capturedByWhite), List.copyOf(capturedByBlack));
     }
 
     private Side sideToMove() {
