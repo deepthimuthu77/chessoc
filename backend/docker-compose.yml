@@ -51,5 +51,19 @@ services:
       - "8080:8080"
       - "8081:8081"
 
+  # Production web build. For local UI work run `npm run dev` in ../web instead.
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:8080
+        NEXT_PUBLIC_WS_BASE: ws://localhost:8081
+    depends_on:
+      - server
+    # Host 3001 so the prod build can run alongside `npm run dev` (host 3000).
+    ports:
+      - "3001:3000"
+
 volumes:
   pgdata:

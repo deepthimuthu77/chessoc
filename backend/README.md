@@ -10,10 +10,16 @@ vector64 engine. See `doc/BACKEND_ARCHITECTURE.md` and `doc/ENGINE_INTEGRATION.m
 docker compose up --build
 ```
 
-Brings up Postgres, the engine service, and the server (HTTP 8080, WSS 8081). The engine service is a
-thin TCP front over the validator line protocol: with no binary it runs a correct dev engine
-(python-chess, standard + crazyhouse); to use the real vector64 binary, mount it and set `ENGINE_CMD`
-in `docker-compose.yml`.
+Brings up Postgres, the engine service, the server (HTTP 8080, WSS 8081), and a production web build
+(`../web`, Next.js standalone) on host port 3001. The engine service is a thin TCP front over the
+validator line protocol: with no binary it runs a correct dev engine (python-chess, standard +
+crazyhouse); to use the real vector64 binary, mount it and set `ENGINE_CMD` in `docker-compose.yml`.
+
+The web container is the production build; for local UI iteration run the dev server instead:
+
+```bash
+cd ../web && npm run dev   # http://localhost:3000
+```
 
 Smoke-test a live move end-to-end (login → game → WSS → engine → persisted):
 
