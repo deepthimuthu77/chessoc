@@ -39,13 +39,14 @@ export default function RoomPage() {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
-          <Chat messages={game.chat} onSend={game.sendChat} />
+          {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} />}
         </div>
 
         <div className="relative flex w-full max-w-2xl flex-col items-center">
           <Board
             pieces={game.pieces}
-            legalTargets={game.legalTargets}
+            legalMoves={game.legalMoves}
+            lastMove={game.lastMove}
             interactive={game.interactive}
             onMoveIntent={game.sendMove}
           />

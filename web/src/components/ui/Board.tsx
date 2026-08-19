@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Piece } from './Piece';
 
 export interface BoardPiece {
@@ -8,7 +8,9 @@ export interface BoardPiece {
 
 interface BoardProps {
   pieces: BoardPiece[];
-  legalTargets?: ReadonlySet<string>;
+  /** Legal destinations per source square (from the server's move capabilities). */
+  legalMoves?: Record<string, string[]>;
+  lastMove?: { from: string; to: string } | null;
   interactive?: boolean;
   onMoveIntent?: (from: string, to: string) => void;
 }
@@ -17,21 +19,36 @@ const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 export function Board({
   pieces,
-  legalTargets = new Set<string>(),
+  legalMoves = {},
+  lastMove = null,
   interactive = false,
   onMoveIntent,
 }: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
 
+  const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
+  const targets = selectedSquare ? legalMoves[selectedSquare] ?? [] : [];
+  const targetSet = new Set(targets);
+
   function attemptMove(fromSquare: string, toSquare: string) {
-    if (!interactive || !legalTargets.has(toSquare)) {
+    const legal = (legalMoves[fromSquare] ?? []).includes(toSquare);
+    if (!interactive || !legal) {
       setSelectedSquare(null);
       return;
     }
-
     onMoveIntent?.(fromSquare, toSquare);
     setSelectedSquare(null);
+  }
+
+  // a click on a piece captures (if it sits on a legal target) or selects it; a drag always selects
+  function handlePieceClick(square: string, isDrag = false) {
+    if (!interactive) return;
+    if (!isDrag && selectedSquare && targetSet.has(square)) {
+      attemptMove(selectedSquare, square);
+    } else {
+      setSelectedSquare(square);
+    }
   }
 
   function handleDrop(fromSquare: string, point: { x: number; y: number }) {
@@ -63,7 +80,9 @@ export function Board({
         const square = `${FILES[col]}${8 - row}`;
         const isDark = (row + col) % 2 === 1;
         const isSelected = selectedSquare === square;
-        const isLegalDestination = selectedSquare !== null && legalTargets.has(square);
+        const isTarget = selectedSquare !== null && targetSet.has(square);
+        const isCapture = isTarget && occupied.has(square);
+        const isLast = lastMove !== null && (square === lastMove.from || square === lastMove.to);
 
         return (
           <button
@@ -72,14 +91,17 @@ export function Board({
             aria-label={square}
             disabled={!interactive}
             onClick={() => selectedSquare && attemptMove(selectedSquare, square)}
-            className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} ${
-              isSelected ? 'bg-blue-400/30 ring-4 ring-inset ring-blue-500' : ''
-            } disabled:cursor-default`}
+            className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} disabled:cursor-default`}
           >
-            {isLegalDestination && (
-              <span className="absolute inset-0 flex items-center justify-center">
-                <span className="h-6 w-6 rounded-full bg-black/20 md:h-8 md:w-8" />
+            {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}
+            {isSelected && <span className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
+            {isTarget && !isCapture && (
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="h-1/3 w-1/3 rounded-full bg-black/25" />
               </span>
+            )}
+            {isCapture && (
+              <span className="pointer-events-none absolute inset-[7%] rounded-full border-4 border-black/25 md:border-[6px]" />
             )}
             {col === 0 && (
               <span className={`absolute left-1 top-1 text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
@@ -109,7 +131,7 @@ export function Board({
                 row={row}
                 squareName={square}
                 interactive={interactive}
-                onPieceClick={setSelectedSquare}
+                onPieceClick={handlePieceClick}
                 onDrop={handleDrop}
               />
             );

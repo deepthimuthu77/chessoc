@@ -18,7 +18,8 @@ import {
   findMove,
   findRematch,
   findResign,
-  legalTargets,
+  lastMoveSquares,
+  legalMovesBySource,
   materialScore,
   promotionChoices,
   toModalResult,
@@ -161,10 +162,11 @@ export function useGame(room: string) {
   const interactive = state.connection === 'connected' && isMyTurn && !state.pendingIntentId;
 
   const pieces = useMemo(() => (snapshot ? fenToPieces(snapshot.fen) : []), [snapshot]);
-  const targets = useMemo(
-    () => (interactive ? legalTargets(state.capabilities) : new Set<string>()),
+  const legalMoves = useMemo(
+    () => (interactive ? legalMovesBySource(state.capabilities) : {}),
     [state.capabilities, interactive],
   );
+  const lastMove = useMemo(() => (snapshot ? lastMoveSquares(snapshot.moves) : null), [snapshot]);
 
   const clocks = snapshot
     ? displayClocks(snapshot.clockSample, receivedAt, !snapshot.result)
@@ -177,6 +179,7 @@ export function useGame(room: string) {
   const youMaterial = materialScore(youCaptured);
   const oppMaterial = materialScore(oppCaptured);
 
+  const isVsEngine = !!snapshot && (snapshot.whitePlayerId === 'engine' || snapshot.blackPlayerId === 'engine');
   const caps = state.capabilities;
   const has = (kind: Capability['kind']) => caps.some((c) => c.kind === kind);
   const active = state.connection === 'connected' && !!snapshot && !snapshot.result && isPlayer;
@@ -193,9 +196,11 @@ export function useGame(room: string) {
     connected: !!snapshot,
     color: myColor,
     isSpectator: color === 'spectator',
+    isVsEngine,
     error: state.error,
     pieces,
-    legalTargets: targets,
+    legalMoves,
+    lastMove,
     interactive,
     history: snapshot?.moves ?? [],
     result: snapshot?.result ? toModalResult(snapshot.result) : undefined,
@@ -206,7 +211,7 @@ export function useGame(room: string) {
       score: Math.max(0, youMaterial - oppMaterial),
     },
     opponent: {
-      name: myColor ? capitalize(other) : 'Opponent',
+      name: isVsEngine ? 'Computer' : myColor ? capitalize(other) : 'Opponent',
       clock: myColor === 'black' ? clocks.white : clocks.black,
       captured: oppCaptured,
       score: Math.max(0, oppMaterial - youMaterial),

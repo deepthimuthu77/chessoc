@@ -75,6 +75,8 @@ export interface CreateOptions {
   minutes?: number;
   increment?: number;
   rated?: boolean;
+  vsEngine?: boolean;
+  color?: 'white' | 'black';
 }
 
 export const api = {

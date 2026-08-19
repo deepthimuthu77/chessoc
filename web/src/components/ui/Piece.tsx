@@ -24,7 +24,7 @@ interface PieceProps {
   squareName: string;
   interactive: boolean;
   onDrop: (fromSquare: string, point: { x: number; y: number }) => void;
-  onPieceClick: (square: string) => void;
+  onPieceClick: (square: string, isDrag?: boolean) => void;
 }
 
 export function Piece({ char, col, row, squareName, interactive, onDrop, onPieceClick }: PieceProps) {
@@ -45,7 +45,7 @@ export function Piece({ char, col, row, squareName, interactive, onDrop, onPiece
       drag={interactive}
       dragMomentum={false}
       onClick={() => interactive && onPieceClick(squareName)}
-      onDragStart={() => interactive && onPieceClick(squareName)}
+      onDragStart={() => interactive && onPieceClick(squareName, true)}
       onDragEnd={(_, info) => {
         if (interactive) onDrop(squareName, { x: info.point.x, y: info.point.y });
       }}

@@ -27,16 +27,30 @@ export function fenToPieces(fen: string): BoardPiece[] {
 
 const moveCaps = (caps: Capability[]) => caps.filter((c) => c.kind === 'move');
 
-/** Destination squares from the player's move capabilities (drops excluded from board targets). */
-export function legalTargets(caps: Capability[]): Set<string> {
-  const set = new Set<string>();
+/** Legal destinations grouped by source square, so the board can scope highlights to one piece. */
+export function legalMovesBySource(caps: Capability[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
   for (const c of moveCaps(caps)) {
     const uci = c.params.uci;
     if (uci.length >= 4 && uci[1] !== '@') {
-      set.add(uci.slice(2, 4));
+      const from = uci.slice(0, 2);
+      const to = uci.slice(2, 4);
+      (map[from] ??= []).push(to);
     }
   }
-  return set;
+  return map;
+}
+
+/** Source and destination of the most recent move, for highlighting. */
+export function lastMoveSquares(moves: string[]): { from: string; to: string } | null {
+  if (moves.length === 0) {
+    return null;
+  }
+  const uci = moves[moves.length - 1];
+  if (uci[1] === '@') {
+    return { from: uci.slice(2, 4), to: uci.slice(2, 4) };
+  }
+  return { from: uci.slice(0, 2), to: uci.slice(2, 4) };
 }
 
 /** The exact move capability for from→to, preferring a queen promotion when several exist. */
