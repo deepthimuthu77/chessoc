@@ -6,6 +6,8 @@ import com.chessoc.server.domain.Variant;
 import com.chessoc.server.games.GameRecord;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.Lobby;
+import com.chessoc.server.match.state.MatchGame;
+import com.chessoc.server.match.state.PersistedPly;
 import com.chessoc.server.protocol.ProtocolMapper;
 import com.chessoc.server.rating.LeaderboardEntry;
 import com.chessoc.server.session.AuthException;
@@ -53,6 +55,8 @@ public final class HttpAuthApi {
         route("/leaderboard", this::leaderboard);
         route("/profile", this::profile);
         route("/games/mine", this::gamesMine);
+        route("/games/active", this::gamesActive);
+        route("/game/moves", this::gameMoves);
         server.setExecutor(Executors.newCachedThreadPool());
     }
 
@@ -292,6 +296,44 @@ public final class HttpAuthApi {
             out.add(row);
         }
         send(x, 200, Map.of("games", out));
+    }
+
+    private void gamesActive(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String me = token.playerId();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (MatchGame g : s.matches().activeFor(me)) {
+            String opponentId = me.equals(g.whiteId()) ? g.blackId() : g.whiteId();
+            String opponent = opponentId == null ? "waiting"
+                    : Lobby.ENGINE_ID.equals(opponentId) ? "Computer"
+                    : s.accounts().findById(opponentId).map(Account::username).orElse("guest");
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("gameId", g.gameId());
+            row.put("color", me.equals(g.whiteId()) ? "white" : "black");
+            row.put("opponent", opponent);
+            out.add(row);
+        }
+        send(x, 200, Map.of("games", out));
+    }
+
+    private void gameMoves(HttpExchange x) throws IOException {
+        String gameId = query(x).get("id");
+        if (gameId == null) {
+            send(x, 400, Map.of("error", "id required"));
+            return;
+        }
+        List<Map<String, Object>> plies = new ArrayList<>();
+        for (PersistedPly p : s.matchRepo().plies(gameId)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("version", p.version());
+            row.put("uci", p.move().value());
+            row.put("fen", p.fen().raw());
+            plies.add(row);
+        }
+        send(x, 200, Map.of("gameId", gameId, "plies", plies));
     }
 
     // ---- plumbing ----

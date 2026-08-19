@@ -73,6 +73,7 @@ public final class MatchGame {
     private long version;
     private long turnStartMs;
     private GameResult result;
+    private boolean inCheck;
     private String pendingDrawOfferBy;
     private Scheduler.Cancellable flagTimer;
 
@@ -100,6 +101,10 @@ public final class MatchGame {
 
     public String gameId() {
         return gameId;
+    }
+
+    public boolean isOver() {
+        return result != null;
     }
 
     public String whiteId() {
@@ -308,6 +313,7 @@ public final class MatchGame {
         currentFen = applied.resultingPosition().orElseThrow();
         moves.add(uci);
         version++;
+        inCheck = applied.inCheck();
         applied.capturedDropType().ifPresent(pt -> {
             // the mover captured an opponent piece; render it in the opponent's colour
             if (mover == Side.WHITE) {
@@ -573,7 +579,7 @@ public final class MatchGame {
         ClockSample sample = new ClockSample(white, black, sideToMove(), now);
         return new GameSnapshot(gameId, version, initialFen, currentFen, sideToMove(),
                 List.copyOf(moves), sample, Optional.ofNullable(result), whiteId,
-                blackId == null ? "" : blackId, List.copyOf(capturedByWhite), List.copyOf(capturedByBlack));
+                blackId == null ? "" : blackId, inCheck, List.copyOf(capturedByWhite), List.copyOf(capturedByBlack));
     }
 
     private Side sideToMove() {

@@ -42,7 +42,8 @@ class HttpAuthApiTest {
         Scheduler noop = (task, delay) -> () -> {
         };
         UnavailableEngine engine = new UnavailableEngine();
-        MatchService matches = new MatchService(engine, new InMemoryMatchRepository(), noop, () -> 0L);
+        InMemoryMatchRepository matchRepo = new InMemoryMatchRepository();
+        MatchService matches = new MatchService(engine, matchRepo, noop, () -> 0L);
         InMemoryAccountRepository accounts = new InMemoryAccountRepository();
         InMemoryRatingRepository ratings = new InMemoryRatingRepository();
         InMemoryFriendRepository friends = new InMemoryFriendRepository();
@@ -55,7 +56,7 @@ class HttpAuthApiTest {
                 new TicketService(() -> 0L, 60_000),
                 new SessionRegistry(), lobby, new AccountService(accounts), accounts,
                 new LeaderboardService(ratings, accounts), friends, games, new Presence(),
-                3_600_000, () -> 0L);
+                matches, matchRepo, 3_600_000, () -> 0L);
         api = new HttpAuthApi(0, svc);
         api.start();
     }

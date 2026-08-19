@@ -4,6 +4,8 @@ import com.chessoc.server.account.AccountRepository;
 import com.chessoc.server.account.AccountService;
 import com.chessoc.server.games.GamesRepository;
 import com.chessoc.server.match.state.Lobby;
+import com.chessoc.server.match.state.MatchRepository;
+import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.rating.LeaderboardService;
 import com.chessoc.server.session.SessionRegistry;
 import com.chessoc.server.session.TicketService;
@@ -24,6 +26,8 @@ public record ApiServices(
         FriendRepository friends,
         GamesRepository games,
         Presence presence,
+        MatchService matches,
+        MatchRepository matchRepo,
         long tokenTtlMs,
         LongSupplier clock) {
 }

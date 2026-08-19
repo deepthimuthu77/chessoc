@@ -21,6 +21,7 @@ public record GameSnapshot(
         Optional<GameResult> result,
         String whitePlayerId,
         String blackPlayerId,
+        boolean inCheck,
         List<String> capturedByWhite,
         List<String> capturedByBlack) {
 

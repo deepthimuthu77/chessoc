@@ -40,4 +40,11 @@ public final class MatchService {
     public Optional<MatchGame> get(String gameId) {
         return Optional.ofNullable(games.get(gameId));
     }
+
+    /** Live (unfinished) games the account is a participant in. */
+    public java.util.List<MatchGame> activeFor(String accountId) {
+        return games.values().stream()
+                .filter(g -> (accountId.equals(g.whiteId()) || accountId.equals(g.blackId())) && !g.isOver())
+                .toList();
+    }
 }

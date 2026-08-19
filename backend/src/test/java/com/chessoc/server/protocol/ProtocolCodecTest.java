@@ -52,7 +52,7 @@ class ProtocolCodecTest {
         GameSnapshot snap = new GameSnapshot(
                 "g1", 1, start, start, Side.WHITE, List.of(Uci.of("e2e4")),
                 new ClockSample(180000, 180000, Side.WHITE, 1000),
-                Optional.empty(), "wp", "bp", List.of(), List.of());
+                Optional.empty(), "wp", "bp", false, List.of(), List.of());
         Capability cap = new Capability(
                 "c1", "s1", "g1", 1, CapabilityKind.MOVE,
                 Map.of("uci", "e2e4"), 5000, "sig");
