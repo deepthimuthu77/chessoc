@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Board } from '@/components/ui/Board';
 import { CapturedPieces } from '@/components/ui/CapturedPieces';
 import { Chat } from '@/components/ui/Chat';
+import { Hand } from '@/components/ui/Hand';
 import { ConnectionOverlay } from '@/components/ui/ConnectionOverlay';
 import { GameControls } from '@/components/ui/GameControls';
 import { GameOverModal } from '@/components/ui/GameOverModal';
@@ -16,6 +17,7 @@ export default function RoomPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const game = useGame(params.id);
+  const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
 
   // both players accepted a rematch — the server created the new game
   useEffect(() => {
@@ -23,6 +25,15 @@ export default function RoomPage() {
       router.push(`/room/${game.rematchGameId}`);
     }
   }, [game.rematchGameId, router]);
+
+  const dropTargets = selectedDrop ? game.dropTargets[selectedDrop] ?? [] : [];
+
+  function onDropSquare(square: string) {
+    if (selectedDrop && dropTargets.includes(square)) {
+      game.sendDrop(selectedDrop, square);
+    }
+    setSelectedDrop(null); // any click ends the drop selection
+  }
 
   const lastPly = game.history[game.history.length - 1];
   const announcement = game.result
@@ -37,7 +48,16 @@ export default function RoomPage() {
       <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
         <div className="flex w-full max-w-md flex-col space-y-6 xl:w-80">
           <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} captured={game.opponent.captured} score={game.opponent.score} />
+          {game.isCrazyhouse && <Hand pieces={game.oppHand} />}
           <MoveHistory history={game.history} />
+          {game.isCrazyhouse && (
+            <Hand
+              pieces={game.yourHand}
+              selected={selectedDrop}
+              interactive={game.interactive}
+              onSelect={(p) => setSelectedDrop((cur) => (cur === p ? null : p))}
+            />
+          )}
           <PlayerPanel label="You" name={game.you.name} clock={game.you.clock} captured={game.you.captured} score={game.you.score} highlighted />
           <GameControls
             active={game.active}
@@ -62,6 +82,8 @@ export default function RoomPage() {
             orientation={game.orientation}
             interactive={game.interactive}
             onMoveIntent={game.sendMove}
+            dropTargets={dropTargets}
+            onDropSquare={onDropSquare}
           />
           {!game.connected && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">

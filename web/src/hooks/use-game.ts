@@ -14,6 +14,7 @@ import { initialState, reducer } from '@/lib/store';
 import { LiveTransport } from '@/lib/transport';
 import {
   displayClocks,
+  dropTargetsByPiece,
   fenToPieces,
   findAbort,
   findDrawOffer,
@@ -24,6 +25,7 @@ import {
   lastMoveSquares,
   legalMovesBySource,
   materialScore,
+  parseHand,
   promotionChoices,
   toModalResult,
 } from '@/lib/view-model';
@@ -160,6 +162,15 @@ export function useGame(room: string) {
     [promotion, state.capabilities, commitMove],
   );
 
+  // Crazyhouse: drop a reserve piece (uppercase letter) onto a square via a `P@e4` capability.
+  const sendDrop = useCallback(
+    (pieceUpper: string, to: string) => {
+      if (state.pendingIntentId) return;
+      commitMove(state.capabilities.find((c) => c.kind === 'move' && c.params.uci === `${pieceUpper}@${to}`));
+    },
+    [state.capabilities, state.pendingIntentId, commitMove],
+  );
+
   const resign = useCallback(() => send(findResign(state.capabilities)), [send, state.capabilities]);
   const abort = useCallback(() => send(findAbort(state.capabilities)), [send, state.capabilities]);
   const offerDraw = useCallback(() => send(findDrawOffer(state.capabilities)), [send, state.capabilities]);
@@ -198,6 +209,11 @@ export function useGame(room: string) {
   const oppCaptured = iAmBlack ? snapshot?.capturedByWhite ?? [] : snapshot?.capturedByBlack ?? [];
   const youMaterial = materialScore(youCaptured);
   const oppMaterial = materialScore(oppCaptured);
+
+  const isCrazyhouse = !!snapshot && snapshot.fen.includes('[');
+  const yourHand = snapshot && myColor ? parseHand(snapshot.fen, myColor) : [];
+  const oppHand = snapshot && myColor ? parseHand(snapshot.fen, other) : [];
+  const dropTargets = interactive ? dropTargetsByPiece(state.capabilities) : {};
 
   const isVsEngine = !!snapshot && (snapshot.whitePlayerId === 'engine' || snapshot.blackPlayerId === 'engine');
   const caps = state.capabilities;
@@ -241,6 +257,12 @@ export function useGame(room: string) {
     // chat
     chat: state.chat,
     sendChat,
+    // crazyhouse
+    isCrazyhouse,
+    yourHand,
+    oppHand,
+    dropTargets,
+    sendDrop,
     // actions
     sendMove,
     resign,

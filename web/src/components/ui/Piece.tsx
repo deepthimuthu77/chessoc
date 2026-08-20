@@ -2,7 +2,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const PIECE_POSITIONS: Record<string, { x: string; y: string }> = {
+export const PIECE_POSITIONS: Record<string, { x: string; y: string }> = {
   K: { x: '0%', y: '0%' },
   Q: { x: '20%', y: '0%' },
   B: { x: '40%', y: '0%' },

@@ -15,6 +15,10 @@ interface BoardProps {
   orientation?: 'white' | 'black';
   interactive?: boolean;
   onMoveIntent?: (from: string, to: string) => void;
+  /** Crazyhouse: when a reserve piece is selected, its legal drop squares. */
+  dropTargets?: string[];
+  /** Crazyhouse: a click while a reserve piece is selected (drop or cancel — the parent decides). */
+  onDropSquare?: (square: string) => void;
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -47,10 +51,14 @@ export function Board({
   orientation = 'white',
   interactive = false,
   onMoveIntent,
+  dropTargets = [],
+  onDropSquare,
 }: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const flip = orientation === 'black';
+  const dropMode = dropTargets.length > 0;
+  const dropSet = new Set(dropMode ? dropTargets : []);
 
   const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
   const pieceBySquare = useMemo(() => new Map(pieces.map((p) => [p.square, p.char])), [pieces]);
@@ -80,6 +88,10 @@ export function Board({
 
   function handlePieceClick(square: string, isDrag = false) {
     if (!interactive) return;
+    if (dropMode) {
+      onDropSquare?.(square); // clicking a piece cancels the drop (parent clears selection)
+      return;
+    }
     if (!isDrag && selectedSquare && targetSet.has(square)) {
       attemptMove(selectedSquare, square);
     } else {
@@ -112,13 +124,15 @@ export function Board({
         const col = index % 8;
         const square = squareAt(col, row, flip);
         const isDark = (row + col) % 2 === 1;
-        const isSelected = selectedSquare === square;
-        const isTarget = selectedSquare !== null && targetSet.has(square);
+        const isSelected = !dropMode && selectedSquare === square;
+        const isTarget = !dropMode && selectedSquare !== null && targetSet.has(square);
         const isCapture = isTarget && occupied.has(square);
+        const isDrop = dropSet.has(square);
         const isLast = lastMove !== null && (square === lastMove.from || square === lastMove.to);
         const isCheck = checkSquare === square;
 
         const state = isSelected ? ', selected'
+          : isDrop ? ', drop square'
           : isCapture ? ', capture move'
           : isTarget ? ', legal move'
           : isCheck ? ', in check' : '';
@@ -130,11 +144,16 @@ export function Board({
             aria-label={describeSquare(square, pieceBySquare.get(square), state)}
             aria-pressed={isSelected}
             disabled={!interactive}
-            onClick={() => handleSquareActivate(square)}
+            onClick={() => (dropMode ? onDropSquare?.(square) : handleSquareActivate(square))}
             className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} disabled:cursor-default`}
           >
             {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}
             {isSelected && <span className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
+            {isDrop && (
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="h-1/3 w-1/3 rounded-full bg-emerald-400/60 ring-2 ring-emerald-300/50" />
+              </span>
+            )}
             {isCheck && (
               <span
                 className="pointer-events-none absolute inset-0"

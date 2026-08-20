@@ -41,6 +41,28 @@ export function legalMovesBySource(caps: Capability[]): Record<string, string[]>
   return map;
 }
 
+/** A colour's crazyhouse pocket (reserve), as colour-cased piece letters, parsed from the FEN. */
+export function parseHand(fen: string, color: Color): string[] {
+  const m = fen.split(' ')[0].match(/\[([^\]]*)\]/);
+  if (!m) {
+    return [];
+  }
+  const wantWhite = color === 'white';
+  return [...m[1]].filter((ch) => (ch === ch.toUpperCase()) === wantWhite);
+}
+
+/** Legal drop targets grouped by (uppercase) piece letter, from `P@e4`-style move capabilities. */
+export function dropTargetsByPiece(caps: Capability[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const c of moveCaps(caps)) {
+    const uci = c.params.uci;
+    if (uci[1] === '@') {
+      (map[uci[0]] ??= []).push(uci.slice(2, 4));
+    }
+  }
+  return map;
+}
+
 /** Source and destination of the most recent move, for highlighting. */
 export function lastMoveSquares(moves: string[]): { from: string; to: string } | null {
   if (moves.length === 0) {
