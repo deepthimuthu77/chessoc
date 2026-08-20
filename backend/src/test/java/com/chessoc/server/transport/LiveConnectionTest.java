@@ -23,6 +23,7 @@ import com.chessoc.server.protocol.Envelope;
 import com.chessoc.server.protocol.MessageType;
 import com.chessoc.server.protocol.Messages;
 import com.chessoc.server.protocol.ProtocolCodec;
+import com.chessoc.server.session.RateLimiter;
 import com.chessoc.server.session.Session;
 import java.util.ArrayList;
 import java.util.List;
@@ -125,6 +126,39 @@ class LiveConnectionTest {
 
         Messages.Result result = codec.payload(lastEnvelope(whiteConn, MessageType.RESULT), Messages.Result.class);
         assertThat(result.disposition()).isEqualTo(Disposition.ACCEPTED);
+    }
+
+    @Test
+    void rateLimitsRapidIntents() {
+        ScriptedValidator engine = new ScriptedValidator();
+        engine.legal.add(List.of(Uci.of("e2e4")));
+        engine.legal.add(List.of(Uci.of("e7e5")));
+        engine.applied.add(ApplyResult.legal(Fen.parse(E4), Terminal.NONE, false, Side.BLACK, Optional.empty()));
+        engine.applied.add(ApplyResult.legal(Fen.parse(E5), Terminal.NONE, false, Side.WHITE, Optional.empty()));
+
+        Scheduler noop = (task, delay) -> () -> {
+        };
+        MatchService service = new MatchService(engine, new InMemoryMatchRepository(), noop, () -> 0L, () -> "k");
+        MatchGame game = service.create(new GameSpec("g1", Variant.STANDARD, Fen.parse(INIT),
+                "pW", "pB", TimeControl.fischer(180_000, 0), true));
+
+        CapturingConnection conn = new CapturingConnection();
+        // 1s min interval, clock frozen at 0 → the second intent is always inside the window.
+        LiveConnection live = new LiveConnection(new Session("sW", "pW", "cW"), conn, codec, game,
+                new RateLimiter(1000), () -> 0L);
+
+        Messages.Snapshot snap = codec.payload(lastEnvelope(conn, MessageType.SNAPSHOT), Messages.Snapshot.class);
+        Capability move = snap.capabilities().stream()
+                .filter(c -> c.kind() == CapabilityKind.MOVE && c.moveUci().equals(Uci.of("e2e4")))
+                .findFirst().orElseThrow();
+        String intent = codec.encode(MessageType.INTENT, new Messages.Intent("i1", move.id(), Map.of(), 0));
+
+        live.onMessage(intent);
+        live.onMessage(intent);
+
+        Messages.Result result = codec.payload(lastEnvelope(conn, MessageType.RESULT), Messages.Result.class);
+        assertThat(result.disposition()).isEqualTo(Disposition.REJECTED);
+        assertThat(result.reason()).contains("rate_limited");
     }
 
     @Test
