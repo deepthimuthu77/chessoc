@@ -45,8 +45,10 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - ~~**Abort**~~ — shipped. `ABORT` capability offered until both sides have moved; ends the game
   ABORTED with no rating change and no history row (`Abort` button replaces `Resign` pre-move).
 - **Draw claims** (threefold / fifty-move) — P2. Engine detects; issue a claim capability + UI.
-- **Accessibility** — P1. Keyboard move/selection, screen-reader announcements (live region),
-  reduced-motion path (§13).
+- **Accessibility** — *partial*. Board squares are keyboard-operable (focus + Enter/Space to select
+  then move) with descriptive `aria-label`s; the room has an `aria-live` move/result announcer; the
+  game-over dialog is a labelled `alertdialog`; reduced-motion honours the OS + a setting. A full
+  audit (focus order, high-contrast, all dialogs) is still open.
 
 ## Post-game
 - ~~**Move replay / navigator**~~ — shipped. `/game/moves` + `/review/[id]` step-through.
@@ -68,8 +70,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - ~~**Rating history graph**~~ — shipped. `rating_history` table, sample per rated game end,
   `/ratings/history`, inline SVG chart on the profile with a per-pool selector.
 - ~~**Per-pool rating breakdown**~~ — shipped. `/profile` returns all variant×speed pools.
-- ~~**Client settings**~~ — shipped (sounds, auto-flip, auto-queen, confirm-resign; local). Board
-  theme / piece set / premove / reduced-motion still open.
+- ~~**Client settings**~~ — shipped (sounds, auto-flip, auto-queen, confirm-resign, reduced-motion;
+  local). Board theme / piece set / premove still open.
 
 ## Variants UI
 - **Crazyhouse hand + drops** — P2. Engine + FEN reserve are supported; the board has no reserve/hand
