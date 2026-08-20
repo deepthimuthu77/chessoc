@@ -13,6 +13,7 @@ const TOGGLES: { key: keyof Settings; label: string; help: string }[] = [
   { key: 'autoFlip', label: 'Auto-flip board', help: 'Orient the board to your colour.' },
   { key: 'autoQueen', label: 'Auto-queen', help: 'Promote straight to a queen without asking.' },
   { key: 'confirmResign', label: 'Confirm resign', help: 'Require a second click to resign.' },
+  { key: 'reducedMotion', label: 'Reduced motion', help: 'Turn off non-essential animations.' },
 ];
 
 export default function SettingsPage() {

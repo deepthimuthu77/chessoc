@@ -19,6 +19,14 @@ interface BoardProps {
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
+const PIECE_NAMES: Record<string, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+
+/** A spoken description of a square for screen readers. */
+function describeSquare(square: string, char: string | undefined, state: string): string {
+  const piece = char ? `${char === char.toUpperCase() ? 'white' : 'black'} ${PIECE_NAMES[char.toLowerCase()]}` : 'empty';
+  return `${square}, ${piece}${state}`;
+}
+
 function squareAt(col: number, row: number, flip: boolean): string {
   const file = flip ? 7 - col : col;
   const rank = flip ? row + 1 : 8 - row;
@@ -45,7 +53,20 @@ export function Board({
   const flip = orientation === 'black';
 
   const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
+  const pieceBySquare = useMemo(() => new Map(pieces.map((p) => [p.square, p.char])), [pieces]);
   const targetSet = new Set(selectedSquare ? legalMoves[selectedSquare] ?? [] : []);
+
+  // Unified activation for clicks and keyboard (Enter/Space on a focused square).
+  function handleSquareActivate(square: string) {
+    if (!interactive) return;
+    if (selectedSquare && targetSet.has(square)) {
+      attemptMove(selectedSquare, square);
+    } else if (occupied.has(square)) {
+      setSelectedSquare(square);
+    } else {
+      setSelectedSquare(null);
+    }
+  }
 
   function attemptMove(fromSquare: string, toSquare: string) {
     const legal = (legalMoves[fromSquare] ?? []).includes(toSquare);
@@ -97,13 +118,19 @@ export function Board({
         const isLast = lastMove !== null && (square === lastMove.from || square === lastMove.to);
         const isCheck = checkSquare === square;
 
+        const state = isSelected ? ', selected'
+          : isCapture ? ', capture move'
+          : isTarget ? ', legal move'
+          : isCheck ? ', in check' : '';
+
         return (
           <button
             key={square}
             type="button"
-            aria-label={square}
+            aria-label={describeSquare(square, pieceBySquare.get(square), state)}
+            aria-pressed={isSelected}
             disabled={!interactive}
-            onClick={() => selectedSquare && attemptMove(selectedSquare, square)}
+            onClick={() => handleSquareActivate(square)}
             className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} disabled:cursor-default`}
           >
             {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}

@@ -24,8 +24,16 @@ export default function RoomPage() {
     }
   }, [game.rematchGameId, router]);
 
+  const lastPly = game.history[game.history.length - 1];
+  const announcement = game.result
+    ? `Game over. ${game.result.winner ? game.result.winner + ' wins' : 'draw'} by ${game.result.kind}.`
+    : lastPly
+      ? `Move ${game.history.length}: ${lastPly}${game.checkSquare ? ', check' : ''}.`
+      : '';
+
   return (
     <main className="flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 md:p-8">
+      <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
         <div className="flex w-full max-w-md flex-col space-y-6 xl:w-80">
           <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} captured={game.opponent.captured} score={game.opponent.score} />

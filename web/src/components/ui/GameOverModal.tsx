@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { prefersReducedMotion } from '@/lib/settings';
 
 interface GameOverModalProps {
   isOpen: boolean;
@@ -14,10 +15,14 @@ interface GameOverModalProps {
 }
 
 export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps) {
+  const reduce = prefersReducedMotion();
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Game over"
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -26,8 +31,8 @@ export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps)
           <motion.div
             animate={{ scale: 1, y: 0 }}
             className="mx-4 flex w-full max-w-sm flex-col items-center rounded-3xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl"
-            exit={{ scale: 0.9, y: 20 }}
-            initial={{ scale: 0.9, y: 20 }}
+            exit={reduce ? undefined : { scale: 0.9, y: 20 }}
+            initial={reduce ? false : { scale: 0.9, y: 20 }}
           >
             <span className="mb-2 text-4xl font-black text-transparent bg-clip-text bg-linear-to-br from-white to-zinc-400">
               {result?.kind === 'aborted' ? 'Aborted' : 'Game Over'}
