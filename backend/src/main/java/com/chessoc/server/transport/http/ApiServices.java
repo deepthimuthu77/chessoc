@@ -6,6 +6,7 @@ import com.chessoc.server.games.GamesRepository;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchRepository;
 import com.chessoc.server.match.state.MatchService;
+import com.chessoc.server.matchmaking.SeekCoordinator;
 import com.chessoc.server.rating.LeaderboardService;
 import com.chessoc.server.session.SessionRegistry;
 import com.chessoc.server.session.TicketService;
@@ -28,6 +29,7 @@ public record ApiServices(
         Presence presence,
         MatchService matches,
         MatchRepository matchRepo,
+        SeekCoordinator seeks,
         long tokenTtlMs,
         LongSupplier clock) {
 }

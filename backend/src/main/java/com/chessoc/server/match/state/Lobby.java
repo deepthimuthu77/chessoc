@@ -86,18 +86,18 @@ public final class Lobby {
         Fen start = Fen.parse(variant == Variant.STANDARD ? STANDARD_START : CRAZYHOUSE_START);
         MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, null, tc, rated));
         game.onComplete(result -> onComplete(game, result));
-        game.onRematch(this::createRematch);
+        game.onRematch(this::createPaired);
         return gameId;
     }
 
-    /** Create the rematch game with both seats pre-assigned; returns its id (also its room). */
-    public synchronized String createRematch(String whiteId, String blackId, Variant variant,
-                                             TimeControl tc, boolean rated) {
+    /** Create a game with both seats pre-assigned (rematch or a matchmaking pairing); returns its id. */
+    public synchronized String createPaired(String whiteId, String blackId, Variant variant,
+                                            TimeControl tc, boolean rated) {
         String gameId = UUID.randomUUID().toString();
         Fen start = Fen.parse(variant == Variant.STANDARD ? STANDARD_START : CRAZYHOUSE_START);
         MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, blackId, tc, rated));
         game.onComplete(result -> onComplete(game, result));
-        game.onRematch(this::createRematch);
+        game.onRematch(this::createPaired);
         gameByRoom.put(gameId, gameId);
         return gameId;
     }

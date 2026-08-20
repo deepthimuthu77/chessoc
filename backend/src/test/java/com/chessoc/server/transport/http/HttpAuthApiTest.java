@@ -11,6 +11,8 @@ import com.chessoc.server.match.state.InMemoryMatchRepository;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.match.state.Scheduler;
+import com.chessoc.server.matchmaking.MatchmakingService;
+import com.chessoc.server.matchmaking.SeekCoordinator;
 import com.chessoc.server.rating.InMemoryRatingRepository;
 import com.chessoc.server.rating.LeaderboardService;
 import com.chessoc.server.rating.RatingService;
@@ -56,7 +58,8 @@ class HttpAuthApiTest {
                 new TicketService(() -> 0L, 60_000),
                 new SessionRegistry(), lobby, new AccountService(accounts), accounts,
                 new LeaderboardService(ratings, accounts), friends, games, new Presence(),
-                matches, matchRepo, 3_600_000, () -> 0L);
+                matches, matchRepo,
+                new SeekCoordinator(new MatchmakingService(), lobby::createPaired), 3_600_000, () -> 0L);
         api = new HttpAuthApi(0, svc);
         api.start();
     }

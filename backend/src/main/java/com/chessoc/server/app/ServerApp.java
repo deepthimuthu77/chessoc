@@ -17,6 +17,8 @@ import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.match.state.PostgresMatchRepository;
 import com.chessoc.server.match.state.Scheduler;
 import com.chessoc.server.match.state.SystemScheduler;
+import com.chessoc.server.matchmaking.MatchmakingService;
+import com.chessoc.server.matchmaking.SeekCoordinator;
 import com.chessoc.server.protocol.ProtocolCodec;
 import com.chessoc.server.rating.InMemoryRatingRepository;
 import com.chessoc.server.rating.LeaderboardService;
@@ -71,6 +73,7 @@ public final class ServerApp {
         AccountService accountService = new AccountService(accounts);
         Presence presence = new Presence();
         Lobby lobby = new Lobby(matches, ratingService, games, engine, TimeControl.fischer(600_000, 5_000), clock);
+        SeekCoordinator seeks = new SeekCoordinator(new MatchmakingService(), lobby::createPaired);
 
         TokenService tokens = new TokenService(config.tokenSecret());
         TicketService tickets = new TicketService(clock, config.ticketTtlMs());
@@ -79,7 +82,7 @@ public final class ServerApp {
         LiveGateway gateway = new LiveGateway(tickets, sessions, matches, codec);
 
         ApiServices api = new ApiServices(tokens, tickets, sessions, lobby, accountService, accounts,
-                leaderboard, friends, games, presence, matches, matchRepo, config.tokenTtlMs(), clock);
+                leaderboard, friends, games, presence, matches, matchRepo, seeks, config.tokenTtlMs(), clock);
         this.http = new HttpAuthApi(config.httpPort(), api);
         this.ws = new WebSocketLiveServer(new InetSocketAddress(config.wsPort()), gateway);
     }

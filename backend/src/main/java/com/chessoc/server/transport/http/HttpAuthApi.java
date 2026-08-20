@@ -50,6 +50,9 @@ public final class HttpAuthApi {
         route("/ticket", this::ticket);
         route("/join", this::join);
         route("/play/create", this::playCreate);
+        route("/seek/cancel", this::seekCancel);
+        route("/seek/status", this::seekStatus);
+        route("/seek", this::seek);
         route("/friends/add", this::friendsAdd);
         route("/friends", this::friendsList);
         route("/leaderboard/friends", this::leaderboardFriends);
@@ -184,6 +187,41 @@ public final class HttpAuthApi {
             gameId = s.lobby().create(token.playerId(), variant, tc, b.path("rated").asBoolean(true));
         }
         send(x, 200, Map.of("gameId", gameId));
+    }
+
+    // ---- quick match ----
+
+    private void seek(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        JsonNode b = read(x);
+        Variant variant = Variant.valueOf(b.path("variant").asText("standard").toUpperCase());
+        long baseMs = Math.max(1, b.path("minutes").asInt(5)) * 60_000L;
+        long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
+        String gameId = s.seeks().seek(token.playerId(), variant, TimeControl.fischer(baseMs, incMs));
+        send(x, 200, gameId == null ? Map.of("status", "waiting")
+                : Map.of("status", "matched", "gameId", gameId));
+    }
+
+    private void seekStatus(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String gameId = s.seeks().poll(token.playerId());
+        send(x, 200, gameId == null ? Map.of("status", "waiting")
+                : Map.of("status", "matched", "gameId", gameId));
+    }
+
+    private void seekCancel(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        s.seeks().cancel(token.playerId());
+        send(x, 200, Map.of("ok", true));
     }
 
     // ---- social ----
