@@ -30,7 +30,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 ## Matchmaking & lobby
 - ~~**Automated quick-match queue**~~ — shipped. `/seek` + `/seek/status` + `/seek/cancel`, pairing →
   game via `SeekCoordinator`, "Quick match" home UI polls until paired.
-- **Open-games / seeks lobby list** — P2. Discoverable open challenges to join.
+- ~~**Open-games lobby list**~~ — shipped. `/games/open` lists created games with an empty seat;
+  "Open challenges" on home joins one (seated as Black). (Auto-refreshing seek list still open.)
 - ~~**Resume ongoing games**~~ — shipped. `/games/active` + "Continue playing" on home.
 - **Challenge notifications** — P2. Notify the challenged player (needs the notification channel below).
 

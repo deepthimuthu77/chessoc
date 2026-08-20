@@ -70,6 +70,7 @@ public final class HttpAuthApi {
         route("/games/mine", this::gamesMine);
         route("/games/active", this::gamesActive);
         route("/games/live", this::gamesLive);
+        route("/games/open", this::gamesOpen);
         route("/game/moves", this::gameMoves);
         route("/account/password", this::changePassword);
         route("/account/delete", this::deleteAccount);
@@ -477,6 +478,29 @@ public final class HttpAuthApi {
             row.put("white", displayName(g.whiteId()));
             row.put("black", displayName(g.blackId()));
             row.put("variant", g.variant().name().toLowerCase());
+            out.add(row);
+        }
+        send(x, 200, Map.of("games", out));
+    }
+
+    private void gamesOpen(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String me = token.playerId();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (MatchGame g : s.matches().liveGames()) {
+            if (g.blackId() != null || Lobby.ENGINE_ID.equals(g.whiteId()) || me.equals(g.whiteId())) {
+                continue; // seat taken, an engine game, or the viewer's own challenge
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("gameId", g.gameId());
+            row.put("creator", displayName(g.whiteId()));
+            row.put("variant", g.variant().name().toLowerCase());
+            row.put("rated", g.rated());
+            row.put("minutes", (int) (g.timeControl().baseMs() / 60_000));
+            row.put("increment", (int) (g.timeControl().incrementMs() / 1_000));
             out.add(row);
         }
         send(x, 200, Map.of("games", out));
