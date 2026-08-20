@@ -4,20 +4,24 @@ import { useEffect, useState } from 'react';
 
 interface GameControlsProps {
   active: boolean;
+  canAbort: boolean;
   canOfferDraw: boolean;
   drawOffer: 'none' | 'incoming' | 'sent';
   requireConfirm?: boolean;
   onResign: () => void;
+  onAbort: () => void;
   onOfferDraw: () => void;
   onRespondDraw: (accept: boolean) => void;
 }
 
 export function GameControls({
   active,
+  canAbort,
   canOfferDraw,
   drawOffer,
   requireConfirm = true,
   onResign,
+  onAbort,
   onOfferDraw,
   onRespondDraw,
 }: GameControlsProps) {
@@ -59,26 +63,36 @@ export function GameControls({
 
   return (
     <div className="flex w-full gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-xl">
-      <button
-        type="button"
-        onClick={() => {
-          if (!requireConfirm) {
-            onResign();
-          } else if (confirmResign) {
-            onResign();
-            setConfirmResign(false);
-          } else {
-            setConfirmResign(true);
+      {canAbort ? (
+        <button
+          type="button"
+          onClick={onAbort}
+          className="flex-1 rounded-xl border border-rose-500/30 px-4 py-3 font-bold text-rose-400 transition-colors hover:bg-rose-500/10"
+        >
+          Abort
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (!requireConfirm) {
+              onResign();
+            } else if (confirmResign) {
+              onResign();
+              setConfirmResign(false);
+            } else {
+              setConfirmResign(true);
+            }
+          }}
+          className={
+            confirmResign
+              ? 'flex-1 rounded-xl bg-rose-600 px-4 py-3 font-bold text-white transition-colors hover:bg-rose-500'
+              : 'flex-1 rounded-xl border border-rose-500/30 px-4 py-3 font-bold text-rose-400 transition-colors hover:bg-rose-500/10'
           }
-        }}
-        className={
-          confirmResign
-            ? 'flex-1 rounded-xl bg-rose-600 px-4 py-3 font-bold text-white transition-colors hover:bg-rose-500'
-            : 'flex-1 rounded-xl border border-rose-500/30 px-4 py-3 font-bold text-rose-400 transition-colors hover:bg-rose-500/10'
-        }
-      >
-        {confirmResign ? 'Confirm resign?' : 'Resign'}
-      </button>
+        >
+          {confirmResign ? 'Confirm resign?' : 'Resign'}
+        </button>
+      )}
       <button
         type="button"
         disabled={!canOfferDraw}

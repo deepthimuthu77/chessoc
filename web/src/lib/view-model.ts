@@ -69,6 +69,7 @@ export function promotionChoices(caps: Capability[], from: string, to: string): 
 }
 
 export const findResign = (caps: Capability[]) => caps.find((c) => c.kind === 'resign');
+export const findAbort = (caps: Capability[]) => caps.find((c) => c.kind === 'abort');
 export const findDrawOffer = (caps: Capability[]) => caps.find((c) => c.kind === 'offer_draw');
 export const findDrawResponse = (caps: Capability[], accept: boolean) =>
   caps.find((c) => c.kind === 'respond_draw' && c.params.accept === String(accept));
@@ -101,12 +102,14 @@ export type ModalKind =
   | 'resignation'
   | 'draw_agreed'
   | 'repetition'
-  | 'insufficient';
+  | 'insufficient'
+  | 'aborted';
 
 const REASON_KIND: Record<string, ModalKind> = {
   checkmate: 'checkmate',
   stalemate: 'stalemate',
   resign: 'resignation',
+  abort: 'aborted',
   agreement: 'draw_agreed',
   timeout: 'timeout',
   timeout_insufficient_material: 'insufficient',
@@ -116,6 +119,7 @@ const REASON_KIND: Record<string, ModalKind> = {
 };
 
 export function toModalResult(result: GameResult): { kind: ModalKind; winner?: Color } {
-  const kind = REASON_KIND[result.reason] ?? (result.type === 'DRAW' ? 'draw_agreed' : 'checkmate');
+  const kind = REASON_KIND[result.reason]
+    ?? (result.type === 'ABORTED' ? 'aborted' : result.type === 'DRAW' ? 'draw_agreed' : 'checkmate');
   return { kind, winner: result.winner ?? undefined };
 }

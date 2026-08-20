@@ -33,10 +33,12 @@ export default function RoomPage() {
           <PlayerPanel label="You" name={game.you.name} clock={game.you.clock} captured={game.you.captured} score={game.you.score} highlighted />
           <GameControls
             active={game.active}
+            canAbort={game.canAbort}
             canOfferDraw={game.canOfferDraw}
             drawOffer={game.drawOffer}
             requireConfirm={game.confirmResign}
             onResign={game.resign}
+            onAbort={game.abort}
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />

@@ -4,7 +4,9 @@ interface GameOverModalProps {
   isOpen: boolean;
   result:
     | {
-        kind: 'checkmate' | 'stalemate' | 'timeout' | 'resignation' | 'draw_agreed' | 'repetition' | 'insufficient';
+        kind:
+          | 'checkmate' | 'stalemate' | 'timeout' | 'resignation'
+          | 'draw_agreed' | 'repetition' | 'insufficient' | 'aborted';
         winner?: 'white' | 'black';
       }
     | undefined;
@@ -28,12 +30,18 @@ export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps)
             initial={{ scale: 0.9, y: 20 }}
           >
             <span className="mb-2 text-4xl font-black text-transparent bg-clip-text bg-linear-to-br from-white to-zinc-400">
-              Game Over
+              {result?.kind === 'aborted' ? 'Aborted' : 'Game Over'}
             </span>
 
             <p className="mb-8 text-center text-lg text-zinc-300">
-              {result?.winner ? result.winner + ' wins by ' : 'Draw by '}
-              <span className="font-bold text-blue-400 capitalize">{result?.kind ?? 'draw'}</span>
+              {result?.kind === 'aborted' ? (
+                <span className="text-zinc-400">No result — the game was aborted.</span>
+              ) : (
+                <>
+                  {result?.winner ? result.winner + ' wins by ' : 'Draw by '}
+                  <span className="font-bold text-blue-400 capitalize">{result?.kind ?? 'draw'}</span>
+                </>
+              )}
             </p>
 
             {onRematch && (

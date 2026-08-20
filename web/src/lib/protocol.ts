@@ -43,7 +43,7 @@ export interface Capability {
   sessionId: string;
   gameId: string;
   gameVersion: number;
-  kind: 'move' | 'resign' | 'offer_draw' | 'respond_draw' | 'rematch';
+  kind: 'move' | 'resign' | 'abort' | 'offer_draw' | 'respond_draw' | 'rematch';
   params: Record<string, string>;
   expiresAtEpochMs: number;
   signature: string;

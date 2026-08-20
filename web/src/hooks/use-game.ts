@@ -15,6 +15,7 @@ import { LiveTransport } from '@/lib/transport';
 import {
   displayClocks,
   fenToPieces,
+  findAbort,
   findDrawOffer,
   findDrawResponse,
   findMove,
@@ -160,6 +161,7 @@ export function useGame(room: string) {
   );
 
   const resign = useCallback(() => send(findResign(state.capabilities)), [send, state.capabilities]);
+  const abort = useCallback(() => send(findAbort(state.capabilities)), [send, state.capabilities]);
   const offerDraw = useCallback(() => send(findDrawOffer(state.capabilities)), [send, state.capabilities]);
   const respondDraw = useCallback(
     (accept: boolean) => send(findDrawResponse(state.capabilities, accept)),
@@ -242,12 +244,14 @@ export function useGame(room: string) {
     // actions
     sendMove,
     resign,
+    abort,
     offerDraw,
     respondDraw,
     rematch,
     rematchGameId: state.rematchGameId,
     // control state
     active,
+    canAbort: active && has('abort'),
     canOfferDraw: active && has('offer_draw'),
     drawOffer,
     confirmResign: getSettings().confirmResign,
