@@ -52,7 +52,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - **PGN export / import** — P2. Moves are stored; add PGN (SAN) serialisation.
 
 ## Social
-- **Friend requests / accept** — P2. Currently a direct mutual add; add request → accept/decline.
+- ~~**Friend requests / accept**~~ — shipped. Directed request → accept/decline (reverse request
+  auto-accepts); `/friends/add` now requests, `/friends/requests|accept|decline`, requests UI.
 - **Follow players** — P3.
 - **Reliable presence** — P2. In-memory online set has no offline detection; add heartbeat/TTL and
   Redis-backed cross-node presence (§10).

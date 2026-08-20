@@ -107,18 +107,27 @@ class HttpAuthApiTest {
 
     @Test
     void addsFriendAndListsIt() throws Exception {
-        String aliceToken = post("/auth/register",
-                "{\"username\":\"alice2\",\"email\":\"a2@x.com\",\"password\":\"secret1\"}", null)
+        JsonNode alice = post("/auth/register",
+                "{\"username\":\"alice2\",\"email\":\"a2@x.com\",\"password\":\"secret1\"}", null);
+        String aliceToken = alice.path("token").asText();
+        String aliceId = alice.path("account").path("id").asText();
+        String bobToken = post("/auth/register",
+                "{\"username\":\"bob2\",\"email\":\"b2@x.com\",\"password\":\"secret1\"}", null)
                 .path("token").asText();
-        post("/auth/register", "{\"username\":\"bob2\",\"email\":\"b2@x.com\",\"password\":\"secret1\"}", null);
 
+        // A request alone does not befriend; bob must accept.
         post("/friends/add", "{\"username\":\"bob2\"}", aliceToken);
+        assertThat(friendsOf(aliceToken).path("friends")).isEmpty();
 
+        post("/friends/accept", "{\"id\":\"" + aliceId + "\"}", bobToken);
+        assertThat(friendsOf(aliceToken).path("friends").get(0).path("username").asText()).isEqualTo("bob2");
+    }
+
+    private JsonNode friendsOf(String token) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + api.port() + "/friends"))
-                .header("Authorization", "Bearer " + aliceToken)
+                .header("Authorization", "Bearer " + token)
                 .GET().build();
-        JsonNode friends = mapper.readTree(client.send(req, HttpResponse.BodyHandlers.ofString()).body());
-        assertThat(friends.path("friends").get(0).path("username").asText()).isEqualTo("bob2");
+        return mapper.readTree(client.send(req, HttpResponse.BodyHandlers.ofString()).body());
     }
 }

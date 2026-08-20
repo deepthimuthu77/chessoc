@@ -14,6 +14,7 @@ import com.chessoc.server.rating.PoolRating;
 import com.chessoc.server.rating.RatingHistoryPoint;
 import com.chessoc.server.session.AuthException;
 import com.chessoc.server.session.SessionToken;
+import com.chessoc.server.social.FriendService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -40,10 +41,12 @@ public final class HttpAuthApi {
 
     private final HttpServer server;
     private final ApiServices s;
+    private final FriendService friendService;
 
     public HttpAuthApi(int port, ApiServices services) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.s = services;
+        this.friendService = new FriendService(services.friends());
         route("/login", this::guestLogin);
         route("/auth/register", this::register);
         route("/auth/login", this::login);
@@ -55,6 +58,9 @@ public final class HttpAuthApi {
         route("/seek/status", this::seekStatus);
         route("/seek", this::seek);
         route("/friends/add", this::friendsAdd);
+        route("/friends/requests", this::friendRequests);
+        route("/friends/accept", this::friendAccept);
+        route("/friends/decline", this::friendDecline);
         route("/friends", this::friendsList);
         route("/leaderboard/friends", this::leaderboardFriends);
         route("/leaderboard", this::leaderboard);
@@ -239,8 +245,49 @@ public final class HttpAuthApi {
             send(x, 404, Map.of("error", "no user named " + username));
             return;
         }
-        s.friends().add(token.playerId(), friend.id());
-        send(x, 200, Map.of("ok", true, "friendId", friend.id()));
+        FriendService.Outcome outcome = friendService.request(token.playerId(), friend.id());
+        send(x, 200, Map.of("ok", true, "friendId", friend.id(),
+                "status", outcome.name().toLowerCase()));
+    }
+
+    private void friendRequests(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        send(x, 200, Map.of(
+                "incoming", friendCards(s.friends().incomingRequests(token.playerId())),
+                "outgoing", friendCards(s.friends().outgoingRequests(token.playerId()))));
+    }
+
+    private List<Map<String, Object>> friendCards(List<String> ids) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Account a : s.accounts().byIds(ids)) {
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("id", a.id());
+            f.put("username", a.username());
+            out.add(f);
+        }
+        return out;
+    }
+
+    private void friendAccept(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String fromId = read(x).path("id").asText();
+        boolean accepted = friendService.accept(token.playerId(), fromId);
+        send(x, 200, Map.of("ok", accepted));
+    }
+
+    private void friendDecline(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        friendService.decline(token.playerId(), read(x).path("id").asText());
+        send(x, 200, Map.of("ok", true));
     }
 
     private void friendsList(HttpExchange x) throws IOException {
