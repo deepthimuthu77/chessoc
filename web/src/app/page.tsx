@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { api, type ActiveGame } from '@/lib/api';
+import { api, type ActiveGame, type OpenGame } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 
@@ -26,12 +26,23 @@ export default function HomePage() {
   const [room, setRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<ActiveGame[]>([]);
+  const [open, setOpen] = useState<OpenGame[]>([]);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (token) {
       api.gamesActive(token).then((r) => setActive(r.games)).catch(() => setActive([]));
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    const load = () => api.gamesOpen(token).then((r) => setOpen(r.games)).catch(() => setOpen([]));
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
   }, [token]);
 
   useEffect(() => {
@@ -238,6 +249,30 @@ export default function HomePage() {
             </button>
           </section>
         </div>
+
+        {open.length > 0 && (
+          <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
+            <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Open challenges</h2>
+            <div className="flex flex-col gap-2">
+              {open.map((g) => (
+                <button
+                  key={g.gameId}
+                  type="button"
+                  onClick={() => router.push(`/room/${g.gameId}`)}
+                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left transition-colors hover:border-blue-500/40"
+                >
+                  <span className="text-zinc-200">
+                    {g.creator}
+                    <span className="ml-2 text-xs capitalize text-zinc-500">
+                      {g.minutes}+{g.increment} · {g.variant} · {g.rated ? 'rated' : 'casual'}
+                    </span>
+                  </span>
+                  <span className="text-sm font-bold text-blue-400">Join</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
           <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Join a room</h2>

@@ -91,6 +91,15 @@ export interface LiveGame {
   variant: string;
 }
 
+export interface OpenGame {
+  gameId: string;
+  creator: string;
+  variant: string;
+  rated: boolean;
+  minutes: number;
+  increment: number;
+}
+
 export interface GameHistoryRow {
   gameId: string;
   opponent: string;
@@ -176,6 +185,7 @@ export const api = {
   gameMoves: (id: string) =>
     request<{ gameId: string; plies: Ply[] }>(`/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
   gamesLive: () => request<{ games: LiveGame[] }>('/games/live', 'GET'),
+  gamesOpen: (token: string) => request<{ games: OpenGame[] }>('/games/open', 'GET', undefined, token),
   changePassword: (oldPassword: string, newPassword: string, token: string) =>
     request<{ ok: boolean }>('/account/password', 'POST', { oldPassword, newPassword }, token),
   deleteAccount: (password: string, token: string) =>
