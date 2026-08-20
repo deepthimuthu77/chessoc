@@ -74,8 +74,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
   local). Board theme / piece set / premove still open.
 
 ## Variants UI
-- **Crazyhouse hand + drops** — P2. Engine + FEN reserve are supported; the board has no reserve/hand
-  UI or drop input.
+- ~~**Crazyhouse hand + drops**~~ — shipped. Reserve parsed from the FEN pocket into a `Hand`; clicking
+  a reserve piece highlights its legal drop squares (from `P@e4` capabilities) and drops on click.
 - **Bughouse** — P3. Two-board layout + partner; the Match aggregate supports 1..N boards.
 
 ## Ops & platform
