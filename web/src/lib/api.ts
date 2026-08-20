@@ -140,6 +140,7 @@ export const api = {
     request<Session>('/auth/login', 'POST', { email, password }),
   guest: () => request<Session>('/login', 'POST', {}),
   me: (token: string) => request<{ account: Account }>('/me', 'GET', undefined, token),
+  heartbeat: (token: string) => request<{ ok: boolean }>('/heartbeat', 'POST', {}, token),
 
   join: (room: string, token: string) => request<JoinResult>('/join', 'POST', { room }, token),
   ticket: (token: string) => request<{ ticket: string }>('/ticket', 'POST', {}, token),

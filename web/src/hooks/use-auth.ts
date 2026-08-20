@@ -27,6 +27,16 @@ export function useAuth(required = false) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep presence fresh while a session is open (server marks online by last-seen TTL).
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    api.heartbeat(token).catch(() => {});
+    const id = setInterval(() => api.heartbeat(token).catch(() => {}), 30_000);
+    return () => clearInterval(id);
+  }, [token]);
+
   const apply = useCallback((session: { token: string; account: Account }) => {
     setAuth(session);
     setAccount(session.account);
