@@ -61,6 +61,17 @@ export interface PoolRating {
   games: number;
 }
 
+export interface RatingPoint {
+  at: number;
+  rating: number;
+}
+
+export interface RatingHistory {
+  variant: string;
+  speed: string;
+  points: RatingPoint[];
+}
+
 export interface Profile {
   account: Account;
   rating: number;
@@ -145,6 +156,9 @@ export const api = {
     request<Board>(`/leaderboard/friends?variant=${variant}&speed=${speed}`, 'GET', undefined, token),
 
   profile: (id: string) => request<Profile>(`/profile?id=${encodeURIComponent(id)}`, 'GET'),
+  ratingHistory: (id: string, variant = 'standard', speed = 'blitz') =>
+    request<RatingHistory>(
+      `/ratings/history?id=${encodeURIComponent(id)}&variant=${variant}&speed=${speed}`, 'GET'),
   gamesMine: (token: string) => request<{ games: GameHistoryRow[] }>('/games/mine', 'GET', undefined, token),
   gamesActive: (token: string) => request<{ games: ActiveGame[] }>('/games/active', 'GET', undefined, token),
   gameMoves: (id: string) =>
