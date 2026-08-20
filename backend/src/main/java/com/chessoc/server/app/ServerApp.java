@@ -72,7 +72,7 @@ public final class ServerApp {
         RatingService ratingService = new RatingService(ratings, clock);
         LeaderboardService leaderboard = new LeaderboardService(ratings, accounts);
         AccountService accountService = new AccountService(accounts);
-        Presence presence = new Presence();
+        Presence presence = new Presence(clock);
         Lobby lobby = new Lobby(matches, ratingService, games, engine, TimeControl.fischer(600_000, 5_000), clock);
         SeekCoordinator seeks = new SeekCoordinator(new MatchmakingService(), lobby::createPaired);
 

@@ -51,6 +51,7 @@ public final class HttpAuthApi {
         route("/auth/register", this::register);
         route("/auth/login", this::login);
         route("/me", this::me);
+        route("/heartbeat", this::heartbeat);
         route("/ticket", this::ticket);
         route("/join", this::join);
         route("/play/create", this::playCreate);
@@ -150,6 +151,15 @@ public final class HttpAuthApi {
         account.put("email", a == null ? "" : a.email());
         account.put("guest", a == null);
         send(x, 200, Map.of("account", account));
+    }
+
+    private void heartbeat(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        s.presence().online(token.playerId());
+        send(x, 200, Map.of("ok", true));
     }
 
     private void ticket(HttpExchange x) throws IOException {

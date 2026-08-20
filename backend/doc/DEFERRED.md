@@ -56,8 +56,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - ~~**Friend requests / accept**~~ — shipped. Directed request → accept/decline (reverse request
   auto-accepts); `/friends/add` now requests, `/friends/requests|accept|decline`, requests UI.
 - **Follow players** — P3.
-- **Reliable presence** — P2. In-memory online set has no offline detection; add heartbeat/TTL and
-  Redis-backed cross-node presence (§10).
+- **Reliable presence** — *partial*. Single-node last-seen TTL (90s) + client `/heartbeat` every 30s
+  now expires stale sessions; Redis-backed cross-node presence (§10) is still the production upgrade.
 - **Spectator discovery** — *partial*. Live-games list (`/games/live` + `/watch`) ships; still to do:
   spectator count, a separate spectator chat channel, and the rated ~15s broadcast delay (§14).
 
