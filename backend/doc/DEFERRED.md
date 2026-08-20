@@ -41,7 +41,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - **Premoves** — P2. Queue a move for the opponent's turn.
 - ~~**Move sounds**~~ — shipped (`sounds` setting).
 - **Takeback offer** — P2. New capability + opponent accept, engine re-derives the position.
-- **Abort** (before each side's first move, no rating change) — P2. Taxonomy exists; wire the flow.
+- ~~**Abort**~~ — shipped. `ABORT` capability offered until both sides have moved; ends the game
+  ABORTED with no rating change and no history row (`Abort` button replaces `Resign` pre-move).
 - **Draw claims** (threefold / fifty-move) — P2. Engine detects; issue a claim capability + UI.
 - **Accessibility** — P1. Keyboard move/selection, screen-reader announcements (live region),
   reduced-motion path (§13).

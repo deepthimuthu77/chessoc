@@ -268,6 +268,7 @@ public final class MatchGame {
         return switch (cap.kind()) {
             case MOVE -> move(session, intent, cap);
             case RESIGN -> resign(session, intent);
+            case ABORT -> abort(session, intent);
             case OFFER_DRAW -> offerDraw(session, intent);
             case RESPOND_DRAW -> respondDraw(session, intent, cap);
             case REMATCH -> rematch(session, intent);
@@ -373,6 +374,20 @@ public final class MatchGame {
         return accepted(intent, session.playerId());
     }
 
+    /** End with no result before either side has committed to the game; no rating change. */
+    private Messages.Result abort(Session session, Messages.Intent intent) {
+        if (playerSide(session.playerId()) == null) {
+            return reject(intent, "not_a_player");
+        }
+        if (moves.size() >= 2) {
+            return reject(intent, "abort_unavailable");
+        }
+        endGame(new GameResult(GameResult.ResultType.ABORTED, Optional.empty(), "abort"));
+        reissueAllCaps();
+        broadcastExcept(session.playerId());
+        return accepted(intent, session.playerId());
+    }
+
     private Messages.Result offerDraw(Session session, Messages.Intent intent) {
         if (playerSide(session.playerId()) == null) {
             return reject(intent, "not_a_player");
@@ -468,7 +483,11 @@ public final class MatchGame {
                     caps.add(cap(sessionId, CapabilityKind.MOVE, Map.of("uci", uci.value()), expiresAt));
                 }
             }
-            caps.add(cap(sessionId, CapabilityKind.RESIGN, Map.of(), expiresAt));
+            if (moves.size() < 2) {
+                caps.add(cap(sessionId, CapabilityKind.ABORT, Map.of(), expiresAt));
+            } else {
+                caps.add(cap(sessionId, CapabilityKind.RESIGN, Map.of(), expiresAt));
+            }
             if (pendingDrawOfferBy == null) {
                 caps.add(cap(sessionId, CapabilityKind.OFFER_DRAW, Map.of(), expiresAt));
             } else if (!playerId.equals(pendingDrawOfferBy)) {

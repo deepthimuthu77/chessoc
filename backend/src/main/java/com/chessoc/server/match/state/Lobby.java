@@ -103,6 +103,9 @@ public final class Lobby {
     }
 
     private void onComplete(MatchGame game, GameResult result) {
+        if (result.type() == GameResult.ResultType.ABORTED) {
+            return; // an aborted game never started; leave no history or rating trace
+        }
         String white = game.whiteId();
         String black = game.blackId();
         String variant = game.variant().name().toLowerCase();

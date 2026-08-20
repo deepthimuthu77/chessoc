@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum CapabilityKind {
     MOVE("move"),
     RESIGN("resign"),
+    ABORT("abort"),
     OFFER_DRAW("offer_draw"),
     RESPOND_DRAW("respond_draw"),
     REMATCH("rematch");

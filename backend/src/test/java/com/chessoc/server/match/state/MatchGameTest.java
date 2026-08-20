@@ -120,6 +120,10 @@ class MatchGameTest {
         ScriptedEngine engine = foolsMateEngine();
         MatchGame game = newGame(engine, new InMemoryMatchRepository(), new ManualScheduler());
 
+        // Resign is only offered once both sides have moved; before that it is abort.
+        play(game, white, wSink, "f2f3", "i1");
+        play(game, black, bSink, "e7e5", "i2");
+
         Capability resign = wSink.capability(CapabilityKind.RESIGN).orElseThrow();
         game.submit(white, new Messages.Intent("r1", resign.id(), Map.of(), 0));
 
@@ -127,6 +131,33 @@ class MatchGameTest {
         assertThat(result.type()).isEqualTo(GameResult.ResultType.WIN);
         assertThat(result.winner()).contains(Side.BLACK);
         assertThat(result.reason()).isEqualTo("resign");
+    }
+
+    @Test
+    void abortBeforeFirstMovesEndsWithNoResult() {
+        ScriptedEngine engine = foolsMateEngine();
+        MatchGame game = newGame(engine, new InMemoryMatchRepository(), new ManualScheduler());
+
+        // Abort is offered up front; resign is not yet available.
+        assertThat(wSink.capability(CapabilityKind.RESIGN)).isEmpty();
+        Capability abort = wSink.capability(CapabilityKind.ABORT).orElseThrow();
+        game.submit(white, new Messages.Intent("a1", abort.id(), Map.of(), 0));
+
+        GameResult result = game.currentSnapshot().result().orElseThrow();
+        assertThat(result.type()).isEqualTo(GameResult.ResultType.ABORTED);
+        assertThat(result.reason()).isEqualTo("abort");
+    }
+
+    @Test
+    void abortIsUnavailableAfterBothSidesMove() {
+        ScriptedEngine engine = foolsMateEngine();
+        MatchGame game = newGame(engine, new InMemoryMatchRepository(), new ManualScheduler());
+
+        play(game, white, wSink, "f2f3", "i1");
+        play(game, black, bSink, "e7e5", "i2");
+
+        assertThat(wSink.capability(CapabilityKind.ABORT)).isEmpty();
+        assertThat(wSink.capability(CapabilityKind.RESIGN)).isPresent();
     }
 
     @Test
