@@ -26,12 +26,27 @@ export default function HomePage() {
   const [room, setRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<ActiveGame[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (token) {
       api.gamesActive(token).then((r) => setActive(r.games)).catch(() => setActive([]));
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!searching || !token) {
+      return;
+    }
+    const poll = setInterval(async () => {
+      const r = await api.seekStatus(token).catch(() => null);
+      if (r?.status === 'matched' && r.gameId) {
+        clearInterval(poll);
+        router.push(`/room/${r.gameId}`);
+      }
+    }, 1500);
+    return () => clearInterval(poll);
+  }, [searching, token, router]);
 
   if (!ready || !account || !token) {
     return <main className="min-h-screen bg-slate-950" />;
@@ -48,6 +63,21 @@ export default function HomePage() {
     } catch {
       setBusy(false);
     }
+  }
+
+  async function quickMatch() {
+    setSearching(true);
+    const r = await api.seek({ variant, minutes: tc.minutes, increment: tc.increment }, token!).catch(() => null);
+    if (r?.status === 'matched' && r.gameId) {
+      router.push(`/room/${r.gameId}`);
+    } else if (!r) {
+      setSearching(false);
+    }
+  }
+
+  async function cancelSearch() {
+    setSearching(false);
+    await api.seekCancel(token!).catch(() => {});
   }
 
   return (
@@ -118,6 +148,36 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Quick match */}
+        <section className="flex flex-col items-center rounded-3xl border border-blue-500/30 bg-gradient-to-b from-blue-500/10 to-transparent p-8 shadow-xl sm:flex-row sm:justify-between">
+          <div className="mb-4 text-center sm:mb-0 sm:text-left">
+            <h2 className="text-lg font-bold text-white">Quick match</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              {searching ? 'Searching for an opponent…' : `Get paired with someone at ${tc.label} ${variant}.`}
+            </p>
+          </div>
+          {searching ? (
+            <div className="flex items-center gap-4">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              <button
+                type="button"
+                onClick={cancelSearch}
+                className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={quickMatch}
+              className="rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all hover:bg-blue-500"
+            >
+              Find opponent
+            </button>
+          )}
         </section>
 
         <div className="grid gap-6 md:grid-cols-2">

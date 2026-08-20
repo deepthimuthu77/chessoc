@@ -106,6 +106,17 @@ export interface CreateOptions {
   color?: 'white' | 'black';
 }
 
+export interface SeekOptions {
+  variant?: string;
+  minutes?: number;
+  increment?: number;
+}
+
+export interface SeekResult {
+  status: 'waiting' | 'matched';
+  gameId?: string;
+}
+
 export const api = {
   register: (username: string, email: string, password: string) =>
     request<Session>('/auth/register', 'POST', { username, email, password }),
@@ -118,6 +129,11 @@ export const api = {
   ticket: (token: string) => request<{ ticket: string }>('/ticket', 'POST', {}, token),
   createGame: (opts: CreateOptions, token: string) =>
     request<{ gameId: string }>('/play/create', 'POST', opts, token),
+
+  seek: (opts: SeekOptions, token: string) =>
+    request<SeekResult>('/seek', 'POST', opts, token),
+  seekStatus: (token: string) => request<SeekResult>('/seek/status', 'GET', undefined, token),
+  seekCancel: (token: string) => request<{ ok: boolean }>('/seek/cancel', 'POST', {}, token),
 
   addFriend: (username: string, token: string) =>
     request<{ ok: boolean }>('/friends/add', 'POST', { username }, token),
