@@ -122,6 +122,13 @@ export interface Ply {
   fen: string;
 }
 
+export interface Analysis {
+  bestMove: string;
+  score: { type: 'cp' | 'mate'; value: number };
+  depth: number;
+  pv: string[];
+}
+
 export interface CreateOptions {
   variant?: string;
   minutes?: number;
@@ -183,7 +190,10 @@ export const api = {
   gamesMine: (token: string) => request<{ games: GameHistoryRow[] }>('/games/mine', 'GET', undefined, token),
   gamesActive: (token: string) => request<{ games: ActiveGame[] }>('/games/active', 'GET', undefined, token),
   gameMoves: (id: string) =>
-    request<{ gameId: string; plies: Ply[] }>(`/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
+    request<{ gameId: string; variant: string; plies: Ply[] }>(
+      `/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
+  analyze: (fen: string, variant = 'standard') =>
+    request<Analysis>(`/analyze?fen=${encodeURIComponent(fen)}&variant=${variant}`, 'GET'),
   gamesLive: () => request<{ games: LiveGame[] }>('/games/live', 'GET'),
   gamesOpen: (token: string) => request<{ games: OpenGame[] }>('/games/open', 'GET', undefined, token),
   changePassword: (oldPassword: string, newPassword: string, token: string) =>

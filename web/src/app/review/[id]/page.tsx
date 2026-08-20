@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { api, type Ply } from '@/lib/api';
+import { api, type Analysis, type Ply } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 import { Board } from '@/components/ui/Board';
@@ -14,12 +14,16 @@ export default function ReviewPage() {
   const params = useParams<{ id: string }>();
   const { account, logout } = useAuth();
   const [plies, setPlies] = useState<Ply[]>([]);
+  const [variant, setVariant] = useState('standard');
   const [idx, setIdx] = useState(0);
+  const [analysis, setAnalysis] = useState<{ fen: string; data: Analysis } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     api.gameMoves(params.id)
       .then((r) => {
         setPlies(r.plies);
+        setVariant(r.variant);
         setIdx(r.plies.length);
       })
       .catch(() => setPlies([]));
@@ -33,6 +37,33 @@ export default function ReviewPage() {
     clamped > 0 && plies[clamped - 1]
       ? { from: plies[clamped - 1].uci.slice(0, 2), to: plies[clamped - 1].uci.slice(2, 4) }
       : null;
+
+  async function analyze() {
+    setAnalyzing(true);
+    try {
+      const data = await api.analyze(fen, variant);
+      setAnalysis({ fen, data });
+    } catch {
+      setAnalysis(null);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  // Show analysis only while it matches the position on the board.
+  const current = analysis && analysis.fen === fen ? analysis.data : null;
+
+  // Engine score is side-to-move relative; show it white-relative (+ favours White).
+  const evalText = (() => {
+    if (!current) return null;
+    const whiteToMove = fen.split(' ')[1] !== 'b';
+    if (current.score.type === 'mate') {
+      const m = whiteToMove ? current.score.value : -current.score.value;
+      return `M${Math.abs(m)}${m < 0 ? ' (Black)' : ''}`;
+    }
+    const cp = (whiteToMove ? current.score.value : -current.score.value) / 100;
+    return `${cp >= 0 ? '+' : ''}${cp.toFixed(2)}`;
+  })();
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -49,6 +80,26 @@ export default function ReviewPage() {
             </span>
             <NavBtn onClick={() => setIdx((i) => Math.min(plies.length, i + 1))} label="▶" />
             <NavBtn onClick={() => setIdx(plies.length)} label="⏭" />
+          </div>
+
+          <div className="mt-4 flex items-center justify-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-3">
+            <button
+              type="button"
+              onClick={analyze}
+              disabled={analyzing}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
+            >
+              {analyzing ? 'Analyzing…' : 'Analyze position'}
+            </button>
+            {current && (
+              <div className="flex items-center gap-3 text-sm">
+                <span className="font-mono text-lg font-bold text-blue-400">{evalText}</span>
+                <span className="text-zinc-500">
+                  best <span className="font-mono text-zinc-300">{current.bestMove}</span>
+                  <span className="ml-2 text-xs text-zinc-600">depth {current.depth}</span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
