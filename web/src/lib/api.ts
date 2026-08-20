@@ -40,6 +40,11 @@ export interface Friend {
   online: boolean;
 }
 
+export interface FriendCard {
+  id: string;
+  username: string;
+}
+
 export interface LeaderboardRow {
   rank: number;
   accountId: string;
@@ -147,8 +152,14 @@ export const api = {
   seekCancel: (token: string) => request<{ ok: boolean }>('/seek/cancel', 'POST', {}, token),
 
   addFriend: (username: string, token: string) =>
-    request<{ ok: boolean }>('/friends/add', 'POST', { username }, token),
+    request<{ ok: boolean; status: string }>('/friends/add', 'POST', { username }, token),
   friends: (token: string) => request<{ friends: Friend[] }>('/friends', 'GET', undefined, token),
+  friendRequests: (token: string) =>
+    request<{ incoming: FriendCard[]; outgoing: FriendCard[] }>('/friends/requests', 'GET', undefined, token),
+  acceptFriend: (id: string, token: string) =>
+    request<{ ok: boolean }>('/friends/accept', 'POST', { id }, token),
+  declineFriend: (id: string, token: string) =>
+    request<{ ok: boolean }>('/friends/decline', 'POST', { id }, token),
 
   leaderboard: (variant = 'standard', speed = 'blitz', limit = 50) =>
     request<Board>(`/leaderboard?variant=${variant}&speed=${speed}&limit=${limit}`, 'GET'),

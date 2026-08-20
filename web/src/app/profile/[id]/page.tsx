@@ -62,7 +62,7 @@ export default function ProfilePage() {
                 onClick={() => api.addFriend(profile.account.username, token).then(() => setAdded(true)).catch(() => {})}
                 className="mb-8 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
               >
-                {added ? 'Friend added' : 'Add friend'}
+                {added ? 'Request sent' : 'Add friend'}
               </button>
             )}
 
