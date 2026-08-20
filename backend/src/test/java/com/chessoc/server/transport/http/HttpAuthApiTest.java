@@ -59,7 +59,7 @@ class HttpAuthApiTest {
                 new SessionRegistry(), lobby, new AccountService(accounts), accounts,
                 new LeaderboardService(ratings, accounts), friends, games, new Presence(),
                 matches, matchRepo,
-                new SeekCoordinator(new MatchmakingService(), lobby::createPaired), 3_600_000, () -> 0L);
+                new SeekCoordinator(new MatchmakingService(), lobby::createPaired), engine, 3_600_000, () -> 0L);
         api = new HttpAuthApi(0, svc);
         api.start();
     }

@@ -77,7 +77,11 @@ def negamax(board, depth):
 
 
 def choose_move(board):
-    """Weak 2-ply material search — legal but not strong (see docs on variant AI)."""
+    """Weak 2-ply material search — legal but not strong (see docs on variant AI).
+
+    Returns (best_move, side_relative_score) where the score is in pawns from the
+    side-to-move's perspective.
+    """
     best, best_score = None, -10 ** 9
     for m in board.legal_moves:
         board.push(m)
@@ -85,7 +89,7 @@ def choose_move(board):
         board.pop()
         if score > best_score:
             best_score, best = score, m
-    return best
+    return best, best_score
 
 
 class Conn:
@@ -158,10 +162,16 @@ class Conn:
     def _go(self):
         try:
             board = self._board()
-            move = choose_move(board)
+            move, raw = choose_move(board)
             if move is None:
                 return json.dumps({"error": "internal_error", "message": "no legal moves"})
-            return json.dumps({"bestMove": move.uci(), "score": {"cp": 0}, "pv": [move.uci()], "depth": 2})
+            if raw >= 100_000:
+                score = {"mate": 1}
+            elif raw <= -100_000:
+                score = {"mate": -1}
+            else:
+                score = {"cp": int(raw * 100)}  # pawns → centipawns, side-relative
+            return json.dumps({"bestMove": move.uci(), "score": score, "pv": [move.uci()], "depth": 2})
         except ValueError as e:
             return _malformed(e)
 

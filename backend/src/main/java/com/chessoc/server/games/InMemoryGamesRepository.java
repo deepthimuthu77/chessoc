@@ -1,8 +1,8 @@
 package com.chessoc.server.games;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** In-memory game metadata for dev and tests. */
@@ -22,6 +22,11 @@ public final class InMemoryGamesRepository implements GamesRepository {
                 .sorted(Comparator.comparingLong(GameRecord::endedAtEpochMs).reversed())
                 .limit(limit)
                 .toList();
+    }
+
+    @Override
+    public Optional<GameRecord> find(String gameId) {
+        return games.stream().filter(g -> g.id().equals(gameId)).findFirst();
     }
 
     @Override

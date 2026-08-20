@@ -50,7 +50,9 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 
 ## Post-game
 - ~~**Move replay / navigator**~~ — shipped. `/game/moves` + `/review/[id]` step-through.
-- **Position analysis** — P2. Eval graph + best move via the search tier; async per §15.
+- ~~**Position analysis**~~ — shipped (on-demand). `/analyze?fen=&variant=` runs the search tier;
+  the review page analyses the viewed position (best move + white-relative eval). The dev engine now
+  reports a real material score. A full per-ply eval graph is still open.
 - **PGN export / import** — P2. Moves are stored; add PGN (SAN) serialisation.
 
 ## Social

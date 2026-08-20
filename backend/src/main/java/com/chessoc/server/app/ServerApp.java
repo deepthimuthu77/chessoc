@@ -83,7 +83,8 @@ public final class ServerApp {
         LiveGateway gateway = new LiveGateway(tickets, sessions, matches, codec);
 
         ApiServices api = new ApiServices(tokens, tickets, sessions, lobby, accountService, accounts,
-                leaderboard, friends, games, presence, matches, matchRepo, seeks, config.tokenTtlMs(), clock);
+                leaderboard, friends, games, presence, matches, matchRepo, seeks, engine,
+                config.tokenTtlMs(), clock);
         this.http = new HttpAuthApi(config.httpPort(), api);
         this.ws = new WebSocketLiveServer(new InetSocketAddress(config.wsPort()), gateway);
     }

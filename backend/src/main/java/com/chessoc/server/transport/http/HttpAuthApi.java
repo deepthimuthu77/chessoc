@@ -1,8 +1,13 @@
 package com.chessoc.server.transport.http;
 
 import com.chessoc.server.account.Account;
+import com.chessoc.server.domain.Fen;
 import com.chessoc.server.domain.Side;
 import com.chessoc.server.domain.Variant;
+import com.chessoc.server.engine.Score;
+import com.chessoc.server.engine.SearchBudget;
+import com.chessoc.server.engine.SearchResult;
+import com.chessoc.server.domain.Uci;
 import com.chessoc.server.games.GameRecord;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.Lobby;
@@ -72,6 +77,7 @@ public final class HttpAuthApi {
         route("/games/live", this::gamesLive);
         route("/games/open", this::gamesOpen);
         route("/game/moves", this::gameMoves);
+        route("/analyze", this::analyze);
         route("/account/password", this::changePassword);
         route("/account/delete", this::deleteAccount);
         server.setExecutor(Executors.newCachedThreadPool());
@@ -464,7 +470,31 @@ public final class HttpAuthApi {
             row.put("fen", p.fen().raw());
             plies.add(row);
         }
-        send(x, 200, Map.of("gameId", gameId, "plies", plies));
+        String variant = s.games().find(gameId).map(GameRecord::variant).orElse("standard");
+        send(x, 200, Map.of("gameId", gameId, "variant", variant, "plies", plies));
+    }
+
+    private void analyze(HttpExchange x) throws IOException {
+        Map<String, String> q = query(x);
+        String fen = q.get("fen");
+        if (fen == null || fen.isBlank()) {
+            send(x, 400, Map.of("error", "fen required"));
+            return;
+        }
+        Variant variant = Variant.valueOf(q.getOrDefault("variant", "standard").toUpperCase());
+        try {
+            SearchResult r = s.analysis().bestMove(variant, Fen.parse(fen), SearchBudget.movetime(500));
+            Map<String, Object> score = r.score() instanceof Score.Mate m
+                    ? Map.of("type", "mate", "value", m.movesToMate())
+                    : Map.of("type", "cp", "value", ((Score.Cp) r.score()).centipawns());
+            send(x, 200, Map.of(
+                    "bestMove", r.bestMove().value(),
+                    "score", score,
+                    "depth", r.depth(),
+                    "pv", r.pv().stream().map(Uci::value).toList()));
+        } catch (RuntimeException e) {
+            send(x, 503, Map.of("error", "analysis unavailable"));
+        }
     }
 
     private void gamesLive(HttpExchange x) throws IOException {

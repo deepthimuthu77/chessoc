@@ -2,6 +2,7 @@ package com.chessoc.server.transport.http;
 
 import com.chessoc.server.account.AccountRepository;
 import com.chessoc.server.account.AccountService;
+import com.chessoc.server.engine.SearchClient;
 import com.chessoc.server.games.GamesRepository;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchRepository;
@@ -30,6 +31,7 @@ public record ApiServices(
         MatchService matches,
         MatchRepository matchRepo,
         SeekCoordinator seeks,
+        SearchClient analysis,
         long tokenTtlMs,
         LongSupplier clock) {
 }

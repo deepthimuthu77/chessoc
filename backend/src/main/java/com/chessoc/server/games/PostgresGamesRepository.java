@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /** Postgres-backed game metadata. */
 public final class PostgresGamesRepository implements GamesRepository {
@@ -71,6 +72,19 @@ public final class PostgresGamesRepository implements GamesRepository {
             throw new IllegalStateException("games query failed", e);
         }
         return out;
+    }
+
+    @Override
+    public Optional<GameRecord> find(String gameId) {
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement("SELECT * FROM games WHERE id=?")) {
+            ps.setString(1, gameId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(read(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("game find failed", e);
+        }
     }
 
     @Override
