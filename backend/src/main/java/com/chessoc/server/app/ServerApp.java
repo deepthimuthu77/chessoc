@@ -49,6 +49,7 @@ public final class ServerApp {
     private final ScheduledExecutorService schedulerExecutor;
     private final HttpAuthApi http;
     private final WebSocketLiveServer ws;
+    private final Db db;
 
     public ServerApp(ServerConfig config, EngineAdapter engine) throws IOException {
         this.engine = engine;
@@ -57,10 +58,10 @@ public final class ServerApp {
         LongSupplier clock = System::currentTimeMillis;
 
         boolean useDb = !config.dbUrl().isBlank();
-        Db db = useDb ? new Db(config.dbUrl(), config.dbUser(), config.dbPassword()) : null;
+        this.db = useDb ? new Db(config.dbUrl(), config.dbUser(), config.dbPassword()) : null;
 
         MatchRepository matchRepo = useDb
-                ? new PostgresMatchRepository(config.dbUrl(), config.dbUser(), config.dbPassword())
+                ? new PostgresMatchRepository(db)
                 : new InMemoryMatchRepository();
         AccountRepository accounts = useDb ? new PostgresAccountRepository(db) : new InMemoryAccountRepository();
         RatingRepository ratings = useDb ? new PostgresRatingRepository(db) : new InMemoryRatingRepository();
@@ -105,5 +106,8 @@ public final class ServerApp {
         http.stop();
         schedulerExecutor.shutdownNow();
         engine.shutdown();
+        if (db != null) {
+            db.close();
+        }
     }
 }

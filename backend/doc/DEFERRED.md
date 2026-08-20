@@ -74,7 +74,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 
 ## Ops & platform
 - **Observability** — P3. Prometheus/Grafana + OpenTelemetry around the engine hop (§16).
-- **JDBC connection pool** — P2. Repositories open a connection per call; add HikariCP.
+- ~~**JDBC connection pool**~~ — shipped. `Db` is backed by HikariCP; all Postgres repositories
+  (incl. match plies) share the pool, closed on shutdown.
 - **Rate limiting on the action path** — P2. `RateLimiter` exists but is not enforced on intents (§11).
 - **Anti-cheat data model + moderation** — P3. `move_events` metadata, report-player, block/mute (§11, §15).
 - **TLS** — P2. Dev runs `ws`/`http`; terminate TLS at the edge (`wss`/`https`).

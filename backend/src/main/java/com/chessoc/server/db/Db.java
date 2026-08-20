@@ -1,25 +1,29 @@
 package com.chessoc.server.db;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/** Thin JDBC helper shared by the Postgres repositories. A pool is a drop-in improvement. */
-public final class Db {
+/** Thin JDBC helper shared by the Postgres repositories, backed by a HikariCP connection pool. */
+public final class Db implements AutoCloseable {
 
-    private final String url;
-    private final String user;
-    private final String password;
+    private final HikariDataSource pool;
 
     public Db(String url, String user, String password) {
-        this.url = url;
-        this.user = user;
-        this.password = password;
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(url);
+        cfg.setUsername(user);
+        cfg.setPassword(password);
+        cfg.setMaximumPoolSize(10);
+        cfg.setMinimumIdle(2);
+        cfg.setPoolName("chessoc-db");
+        this.pool = new HikariDataSource(cfg);
     }
 
     public Connection connect() throws SQLException {
-        return DriverManager.getConnection(url, user, password);
+        return pool.getConnection();
     }
 
     public void exec(String ddl) {
@@ -28,5 +32,10 @@ public final class Db {
         } catch (SQLException e) {
             throw new IllegalStateException("DDL failed: " + ddl, e);
         }
+    }
+
+    @Override
+    public void close() {
+        pool.close();
     }
 }
