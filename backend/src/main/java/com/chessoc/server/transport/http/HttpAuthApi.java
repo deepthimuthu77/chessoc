@@ -11,6 +11,7 @@ import com.chessoc.server.match.state.PersistedPly;
 import com.chessoc.server.protocol.ProtocolMapper;
 import com.chessoc.server.rating.LeaderboardEntry;
 import com.chessoc.server.rating.PoolRating;
+import com.chessoc.server.rating.RatingHistoryPoint;
 import com.chessoc.server.session.AuthException;
 import com.chessoc.server.session.SessionToken;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -58,6 +59,7 @@ public final class HttpAuthApi {
         route("/leaderboard/friends", this::leaderboardFriends);
         route("/leaderboard", this::leaderboard);
         route("/profile", this::profile);
+        route("/ratings/history", this::ratingsHistory);
         route("/games/mine", this::gamesMine);
         route("/games/active", this::gamesActive);
         route("/games/live", this::gamesLive);
@@ -321,6 +323,25 @@ public final class HttpAuthApi {
                 "rating", rating,
                 "stats", Map.of("wins", stats.wins(), "losses", stats.losses(), "draws", stats.draws()),
                 "pools", pools));
+    }
+
+    private void ratingsHistory(HttpExchange x) throws IOException {
+        Map<String, String> q = query(x);
+        String id = q.get("id");
+        if (id == null) {
+            send(x, 400, Map.of("error", "id required"));
+            return;
+        }
+        String variant = q.getOrDefault("variant", "standard");
+        String speed = q.getOrDefault("speed", "blitz");
+        List<Map<String, Object>> points = new ArrayList<>();
+        for (RatingHistoryPoint p : s.leaderboard().history(id, variant, speed)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("at", p.at());
+            row.put("rating", p.rating());
+            points.add(row);
+        }
+        send(x, 200, Map.of("variant", variant, "speed", speed, "points", points));
     }
 
     private void gamesMine(HttpExchange x) throws IOException {

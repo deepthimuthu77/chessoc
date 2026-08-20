@@ -27,6 +27,16 @@ public final class PostgresRatingRepository implements RatingRepository {
                     games      INTEGER          NOT NULL,
                     PRIMARY KEY (account_id, variant, speed)
                 )""");
+        db.exec("""
+                CREATE TABLE IF NOT EXISTS rating_history (
+                    account_id TEXT    NOT NULL,
+                    variant    TEXT    NOT NULL,
+                    speed      TEXT    NOT NULL,
+                    rating     INTEGER NOT NULL,
+                    at         BIGINT  NOT NULL
+                )""");
+        db.exec("CREATE INDEX IF NOT EXISTS rating_history_pool "
+                + "ON rating_history (account_id, variant, speed, at)");
     }
 
     @Override
@@ -123,6 +133,44 @@ public final class PostgresRatingRepository implements RatingRepository {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("forAccount failed", e);
+        }
+        return out;
+    }
+
+    @Override
+    public void appendHistory(String accountId, String variant, String speed, int rating, long at) {
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO rating_history(account_id, variant, speed, rating, at) VALUES (?,?,?,?,?)")) {
+            ps.setString(1, accountId);
+            ps.setString(2, variant);
+            ps.setString(3, speed);
+            ps.setInt(4, rating);
+            ps.setLong(5, at);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("rating history append failed", e);
+        }
+    }
+
+    @Override
+    public List<RatingHistoryPoint> history(String accountId, String variant, String speed, int limit) {
+        List<RatingHistoryPoint> out = new ArrayList<>();
+        try (Connection c = db.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT at, rating FROM rating_history WHERE account_id=? AND variant=? AND speed=? "
+                             + "ORDER BY at ASC LIMIT ?")) {
+            ps.setString(1, accountId);
+            ps.setString(2, variant);
+            ps.setString(3, speed);
+            ps.setInt(4, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new RatingHistoryPoint(rs.getLong(1), rs.getInt(2)));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("rating history read failed", e);
         }
         return out;
     }

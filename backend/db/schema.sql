@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS ratings (
     PRIMARY KEY (account_id, variant, speed)
 );
 
+CREATE TABLE IF NOT EXISTS rating_history (
+    account_id TEXT    NOT NULL,
+    variant    TEXT    NOT NULL,
+    speed      TEXT    NOT NULL,
+    rating     INTEGER NOT NULL,
+    at         BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rating_history_pool ON rating_history (account_id, variant, speed, at);
+
 CREATE TABLE IF NOT EXISTS friends (
     account_id TEXT NOT NULL,
     friend_id  TEXT NOT NULL,

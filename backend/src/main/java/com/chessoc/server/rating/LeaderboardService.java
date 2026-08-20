@@ -29,6 +29,10 @@ public final class LeaderboardService {
         return ratings.forAccount(accountId);
     }
 
+    public List<RatingHistoryPoint> history(String accountId, String variant, String speed) {
+        return ratings.history(accountId, variant, speed, 500);
+    }
+
     private List<LeaderboardEntry> decorate(List<RatingRow> rows) {
         Map<String, String> names = accounts.byIds(rows.stream().map(RatingRow::accountId).toList()).stream()
                 .collect(Collectors.toMap(Account::id, Account::username));

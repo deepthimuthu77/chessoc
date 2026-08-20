@@ -68,7 +68,7 @@ public final class ServerApp {
         GamesRepository games = useDb ? new PostgresGamesRepository(db) : new InMemoryGamesRepository();
 
         MatchService matches = new MatchService(engine, matchRepo, scheduler, clock);
-        RatingService ratingService = new RatingService(ratings);
+        RatingService ratingService = new RatingService(ratings, clock);
         LeaderboardService leaderboard = new LeaderboardService(ratings, accounts);
         AccountService accountService = new AccountService(accounts);
         Presence presence = new Presence();

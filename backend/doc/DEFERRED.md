@@ -60,7 +60,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
   spectator count, a separate spectator chat channel, and the rated ~15s broadcast delay (§14).
 
 ## Profile & settings
-- **Rating history graph** — P2. Persist per-game rating deltas; chart them.
+- ~~**Rating history graph**~~ — shipped. `rating_history` table, sample per rated game end,
+  `/ratings/history`, inline SVG chart on the profile with a per-pool selector.
 - ~~**Per-pool rating breakdown**~~ — shipped. `/profile` returns all variant×speed pools.
 - ~~**Client settings**~~ — shipped (sounds, auto-flip, auto-queen, confirm-resign; local). Board
   theme / piece set / premove / reduced-motion still open.

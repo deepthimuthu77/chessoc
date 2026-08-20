@@ -1,15 +1,18 @@
 package com.chessoc.server.rating;
 
 import com.chessoc.server.matchmaking.Rating;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /** In-memory ratings for dev and tests. */
 public final class InMemoryRatingRepository implements RatingRepository {
 
     private final Map<String, RatingRow> rows = new ConcurrentHashMap<>();
+    private final Map<String, List<RatingHistoryPoint>> history = new ConcurrentHashMap<>();
 
     private static String key(String accountId, String variant, String speed) {
         return accountId + '|' + variant + '|' + speed;
@@ -54,5 +57,18 @@ public final class InMemoryRatingRepository implements RatingRepository {
                     return new PoolRating(parts[1], parts[2], (int) Math.round(r.rating().rating()), r.games());
                 })
                 .toList();
+    }
+
+    @Override
+    public void appendHistory(String accountId, String variant, String speed, int rating, long at) {
+        history.computeIfAbsent(key(accountId, variant, speed), k -> new CopyOnWriteArrayList<>())
+                .add(new RatingHistoryPoint(at, rating));
+    }
+
+    @Override
+    public List<RatingHistoryPoint> history(String accountId, String variant, String speed, int limit) {
+        List<RatingHistoryPoint> all = history.getOrDefault(key(accountId, variant, speed), List.of());
+        int from = Math.max(0, all.size() - limit);
+        return new ArrayList<>(all.subList(from, all.size()));
     }
 }
