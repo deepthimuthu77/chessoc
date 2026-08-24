@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Piece } from './Piece';
 
 export interface BoardPiece {
@@ -19,6 +19,11 @@ interface BoardProps {
   dropTargets?: string[];
   /** Crazyhouse: a click while a reserve piece is selected (drop or cancel — the parent decides). */
   onDropSquare?: (square: string) => void;
+  /** Premove: allow queuing a move on the opponent's turn (own pieces only, no legality check). */
+  allowPremove?: boolean;
+  myColor?: 'white' | 'black' | null;
+  premove?: { from: string; to: string } | null;
+  onPremove?: (from: string, to: string) => void;
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -53,16 +58,46 @@ export function Board({
   onMoveIntent,
   dropTargets = [],
   onDropSquare,
+  allowPremove = false,
+  myColor = null,
+  premove = null,
+  onPremove,
 }: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [premoveFrom, setPremoveFrom] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const flip = orientation === 'black';
   const dropMode = dropTargets.length > 0;
   const dropSet = new Set(dropMode ? dropTargets : []);
+  // Premoves are active only while it isn't our turn (interactive) and there's no drop in progress.
+  const premoveMode = allowPremove && !interactive && !dropMode;
 
   const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
   const pieceBySquare = useMemo(() => new Map(pieces.map((p) => [p.square, p.char])), [pieces]);
   const targetSet = new Set(selectedSquare ? legalMoves[selectedSquare] ?? [] : []);
+
+  function isOwnPiece(square: string): boolean {
+    const ch = pieceBySquare.get(square);
+    if (!ch || !myColor) return false;
+    return (ch === ch.toUpperCase()) === (myColor === 'white');
+  }
+
+  function handlePremoveClick(square: string) {
+    if (premoveFrom === null) {
+      if (isOwnPiece(square)) setPremoveFrom(square);
+    } else {
+      onPremove?.(premoveFrom, square);
+      setPremoveFrom(null);
+    }
+  }
+
+  // Drop the transient from-selection whenever premove mode ends (e.g. our turn arrives).
+  useEffect(() => {
+    if (!premoveMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPremoveFrom(null);
+    }
+  }, [premoveMode]);
 
   // Unified activation for clicks and keyboard (Enter/Space on a focused square).
   function handleSquareActivate(square: string) {
@@ -130,8 +165,11 @@ export function Board({
         const isDrop = dropSet.has(square);
         const isLast = lastMove !== null && (square === lastMove.from || square === lastMove.to);
         const isCheck = checkSquare === square;
+        const isPremove = premove !== null && (square === premove.from || square === premove.to);
+        const isPremoveSel = premoveFrom === square;
 
         const state = isSelected ? ', selected'
+          : isPremove || isPremoveSel ? ', premove'
           : isDrop ? ', drop square'
           : isCapture ? ', capture move'
           : isTarget ? ', legal move'
@@ -142,12 +180,16 @@ export function Board({
             key={square}
             type="button"
             aria-label={describeSquare(square, pieceBySquare.get(square), state)}
-            aria-pressed={isSelected}
-            disabled={!interactive}
-            onClick={() => (dropMode ? onDropSquare?.(square) : handleSquareActivate(square))}
+            aria-pressed={isSelected || isPremoveSel}
+            disabled={!interactive && !premoveMode}
+            onClick={() =>
+              dropMode ? onDropSquare?.(square)
+                : premoveMode ? handlePremoveClick(square)
+                : handleSquareActivate(square)}
             className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} disabled:cursor-default`}
           >
             {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}
+            {(isPremove || isPremoveSel) && <span className="pointer-events-none absolute inset-0 bg-orange-400/40" />}
             {isSelected && <span className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
             {isDrop && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">

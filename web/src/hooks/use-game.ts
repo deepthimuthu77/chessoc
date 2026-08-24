@@ -41,6 +41,7 @@ export function useGame(room: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [color, setColor] = useState<Color | 'spectator' | null>(null);
   const [promotion, setPromotion] = useState<PromotionPrompt | null>(null);
+  const [premove, setPremoveState] = useState<{ from: string; to: string } | null>(null);
   const [receivedAt, setReceivedAt] = useState(0);
   const [, forceTick] = useState(0);
 
@@ -171,6 +172,11 @@ export function useGame(room: string) {
     [state.capabilities, state.pendingIntentId, commitMove],
   );
 
+  const setPremove = useCallback((from: string, to: string) => {
+    if (getSettings().premove) setPremoveState({ from, to });
+  }, []);
+  const clearPremove = useCallback(() => setPremoveState(null), []);
+
   const resign = useCallback(() => send(findResign(state.capabilities)), [send, state.capabilities]);
   const abort = useCallback(() => send(findAbort(state.capabilities)), [send, state.capabilities]);
   const offerDraw = useCallback(() => send(findDrawOffer(state.capabilities)), [send, state.capabilities]);
@@ -227,6 +233,17 @@ export function useGame(room: string) {
         ? 'sent'
         : 'none';
 
+  // When our turn arrives, fire a queued premove if it is now legal; otherwise discard it.
+  useEffect(() => {
+    if (!premove || !interactive) return;
+    const cap = findMove(state.capabilities, premove.from, premove.to);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPremoveState(null);
+    if (cap) commitMove(cap);
+  }, [premove, interactive, state.capabilities, commitMove]);
+
+  const allowPremove = active && !isMyTurn && getSettings().premove;
+
   return {
     status: state.connection,
     connected: !!snapshot,
@@ -263,6 +280,11 @@ export function useGame(room: string) {
     oppHand,
     dropTargets,
     sendDrop,
+    // premove
+    allowPremove,
+    premove,
+    setPremove,
+    clearPremove,
     // actions
     sendMove,
     resign,

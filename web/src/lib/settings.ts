@@ -6,6 +6,7 @@ export interface Settings {
   autoQueen: boolean; // promote straight to a queen without the picker
   confirmResign: boolean;
   reducedMotion: boolean; // disable non-essential animations
+  premove: boolean; // queue a move during the opponent's turn
 }
 
 const KEY = 'chessoc-settings';
@@ -15,6 +16,7 @@ const DEFAULTS: Settings = {
   autoQueen: false,
   confirmResign: true,
   reducedMotion: false,
+  premove: true,
 };
 
 /** True when the user (setting) or the OS (prefers-reduced-motion) asks for reduced motion. */

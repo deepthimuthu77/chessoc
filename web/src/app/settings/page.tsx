@@ -14,6 +14,7 @@ const TOGGLES: { key: keyof Settings; label: string; help: string }[] = [
   { key: 'autoQueen', label: 'Auto-queen', help: 'Promote straight to a queen without asking.' },
   { key: 'confirmResign', label: 'Confirm resign', help: 'Require a second click to resign.' },
   { key: 'reducedMotion', label: 'Reduced motion', help: 'Turn off non-essential animations.' },
+  { key: 'premove', label: 'Premove', help: 'Queue a move during your opponent’s turn.' },
 ];
 
 export default function SettingsPage() {

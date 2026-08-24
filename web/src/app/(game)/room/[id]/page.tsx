@@ -84,6 +84,10 @@ export default function RoomPage() {
             onMoveIntent={game.sendMove}
             dropTargets={dropTargets}
             onDropSquare={onDropSquare}
+            allowPremove={game.allowPremove}
+            myColor={game.color}
+            premove={game.premove}
+            onPremove={game.setPremove}
           />
           {!game.connected && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
