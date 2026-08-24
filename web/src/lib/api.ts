@@ -89,6 +89,7 @@ export interface LiveGame {
   white: string;
   black: string;
   variant: string;
+  spectators: number;
 }
 
 export interface OpenGame {

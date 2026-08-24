@@ -39,6 +39,11 @@ export default function WatchPage() {
                 <span className="flex-1 font-medium text-zinc-100">
                   {g.white} <span className="text-zinc-600">vs</span> {g.black}
                 </span>
+                {g.spectators > 0 && (
+                  <span className="text-xs text-zinc-500">
+                    {g.spectators} watching
+                  </span>
+                )}
                 <span className="text-xs capitalize text-zinc-500">{g.variant}</span>
                 <span className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-rose-400">
                   Live
