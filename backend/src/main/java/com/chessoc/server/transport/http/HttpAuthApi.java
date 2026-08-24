@@ -54,6 +54,7 @@ public final class HttpAuthApi {
         this.friendService = new FriendService(services.friends());
         route("/login", this::guestLogin);
         route("/auth/register", this::register);
+        route("/auth/upgrade", this::upgrade);
         route("/auth/login", this::login);
         route("/me", this::me);
         route("/heartbeat", this::heartbeat);
@@ -113,6 +114,30 @@ public final class HttpAuthApi {
         try {
             Account a = s.accountService().register(
                     b.path("username").asText(), b.path("email").asText(), b.path("password").asText());
+            s.presence().online(a.id());
+            send(x, 200, issueSession(a.id(), a.username(), a.email()));
+        } catch (AuthException | IllegalStateException e) {
+            send(x, 400, Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Turn a guest session into a real account, carrying the guest's games and ratings across. */
+    private void upgrade(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String guestId = token.playerId();
+        if (s.accounts().findById(guestId).isPresent()) {
+            send(x, 400, Map.of("error", "already a registered account"));
+            return;
+        }
+        JsonNode b = read(x);
+        try {
+            Account a = s.accountService().register(
+                    b.path("username").asText(), b.path("email").asText(), b.path("password").asText());
+            s.games().reassign(guestId, a.id());
+            s.leaderboard().reassign(guestId, a.id());
             s.presence().online(a.id());
             send(x, 200, issueSession(a.id(), a.username(), a.email()));
         } catch (AuthException | IllegalStateException e) {

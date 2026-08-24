@@ -60,6 +60,22 @@ public final class InMemoryRatingRepository implements RatingRepository {
     }
 
     @Override
+    public void reassign(String oldId, String newId) {
+        for (String key : List.copyOf(rows.keySet())) {
+            if (key.startsWith(oldId + '|')) {
+                RatingRow r = rows.remove(key);
+                String pool = key.substring(oldId.length()); // "|variant|speed"
+                rows.put(newId + pool, new RatingRow(newId, r.rating(), r.games()));
+            }
+        }
+        for (String key : List.copyOf(history.keySet())) {
+            if (key.startsWith(oldId + '|')) {
+                history.put(newId + key.substring(oldId.length()), history.remove(key));
+            }
+        }
+    }
+
+    @Override
     public void appendHistory(String accountId, String variant, String speed, int rating, long at) {
         history.computeIfAbsent(key(accountId, variant, speed), k -> new CopyOnWriteArrayList<>())
                 .add(new RatingHistoryPoint(at, rating));

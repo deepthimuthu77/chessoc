@@ -13,4 +13,7 @@ public interface GamesRepository {
     Optional<GameRecord> find(String gameId);
 
     PlayerStats statsFor(String accountId);
+
+    /** Move a player's game rows to a new id (guest → account upgrade). */
+    void reassign(String oldId, String newId);
 }

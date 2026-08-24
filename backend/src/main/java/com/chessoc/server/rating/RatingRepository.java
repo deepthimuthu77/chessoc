@@ -24,4 +24,7 @@ public interface RatingRepository {
 
     /** Rating samples for a pool, oldest first, capped at {@code limit}. */
     List<RatingHistoryPoint> history(String accountId, String variant, String speed, int limit);
+
+    /** Move a player's rating rows and history to a new id (guest → account upgrade). */
+    void reassign(String oldId, String newId);
 }

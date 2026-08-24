@@ -109,6 +109,22 @@ public final class PostgresGamesRepository implements GamesRepository {
         }
     }
 
+    @Override
+    public void reassign(String oldId, String newId) {
+        try (Connection c = db.connect()) {
+            for (String col : new String[] {"white_id", "black_id", "winner_account_id"}) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "UPDATE games SET " + col + "=? WHERE " + col + "=?")) {
+                    ps.setString(1, newId);
+                    ps.setString(2, oldId);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("game reassign failed", e);
+        }
+    }
+
     private static GameRecord read(ResultSet rs) throws SQLException {
         String winner = rs.getString("winner_account_id");
         return new GameRecord(rs.getString("id"), rs.getString("white_id"), rs.getString("black_id"),

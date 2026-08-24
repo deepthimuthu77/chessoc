@@ -33,6 +33,11 @@ public final class LeaderboardService {
         return ratings.history(accountId, variant, speed, 500);
     }
 
+    /** Move a player's rating rows and history to a new id (guest → account upgrade). */
+    public void reassign(String oldId, String newId) {
+        ratings.reassign(oldId, newId);
+    }
+
     private List<LeaderboardEntry> decorate(List<RatingRow> rows) {
         Map<String, String> names = accounts.byIds(rows.stream().map(RatingRow::accountId).toList()).stream()
                 .collect(Collectors.toMap(Account::id, Account::username));

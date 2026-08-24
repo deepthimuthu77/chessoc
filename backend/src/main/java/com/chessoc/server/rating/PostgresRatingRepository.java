@@ -175,6 +175,23 @@ public final class PostgresRatingRepository implements RatingRepository {
         return out;
     }
 
+    @Override
+    public void reassign(String oldId, String newId) {
+        try (Connection c = db.connect()) {
+            for (String sql : new String[] {
+                    "UPDATE ratings SET account_id=? WHERE account_id=?",
+                    "UPDATE rating_history SET account_id=? WHERE account_id=?"}) {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, newId);
+                    ps.setString(2, oldId);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("rating reassign failed", e);
+        }
+    }
+
     private static List<RatingRow> readRows(PreparedStatement ps) throws SQLException {
         List<RatingRow> out = new ArrayList<>();
         try (ResultSet rs = ps.executeQuery()) {

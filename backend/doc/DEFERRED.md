@@ -25,7 +25,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - **Account settings** — *partial*. Change password + delete account ship; change email + connected
   providers still open.
 - **Avatar upload** — P2. Storage + `accounts.avatar_url`; show in nav/profile/panels.
-- **Guest → account upgrade** — P2. Guests can play casual; let them claim results into a new account.
+- ~~**Guest → account upgrade**~~ — shipped. "Continue as guest" persists a guest session; `/auth/upgrade`
+  registers an account and reassigns the guest's games + ratings/history to it (home banner + `/upgrade`).
 
 ## Matchmaking & lobby
 - ~~**Automated quick-match queue**~~ — shipped. `/seek` + `/seek/status` + `/seek/cancel`, pairing →
