@@ -40,7 +40,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - ~~**Board flip**~~ — shipped (orients to the player's colour, `autoFlip` setting).
 - ~~**Check indicator**~~ — shipped (`inCheck` in the snapshot, king highlighted).
 - **SAN move list** — P2. Server sends UCI; convert to SAN (engine or a notation helper).
-- **Premoves** — P2. Queue a move for the opponent's turn.
+- ~~**Premoves**~~ — shipped. Queue a move on the opponent's turn (own pieces, orange highlight); it
+  auto-fires when your turn arrives if still legal, else discards. Gated by a `premove` setting.
 - ~~**Move sounds**~~ — shipped (`sounds` setting).
 - **Takeback offer** — P2. New capability + opponent accept, engine re-derives the position.
 - ~~**Abort**~~ — shipped. `ABORT` capability offered until both sides have moved; ends the game
@@ -71,8 +72,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - ~~**Rating history graph**~~ — shipped. `rating_history` table, sample per rated game end,
   `/ratings/history`, inline SVG chart on the profile with a per-pool selector.
 - ~~**Per-pool rating breakdown**~~ — shipped. `/profile` returns all variant×speed pools.
-- ~~**Client settings**~~ — shipped (sounds, auto-flip, auto-queen, confirm-resign, reduced-motion;
-  local). Board theme / piece set / premove still open.
+- ~~**Client settings**~~ — shipped (sounds, auto-flip, auto-queen, confirm-resign, reduced-motion,
+  premove; local). Board theme / piece set still open.
 
 ## Variants UI
 - ~~**Crazyhouse hand + drops**~~ — shipped. Reserve parsed from the FEN pocket into a `Hand`; clicking
