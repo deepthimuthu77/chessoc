@@ -63,8 +63,8 @@ bridge; the in-container dev engine plays a weak 2-ply material AI.
 - **Follow players** — P3.
 - **Reliable presence** — *partial*. Single-node last-seen TTL (90s) + client `/heartbeat` every 30s
   now expires stale sessions; Redis-backed cross-node presence (§10) is still the production upgrade.
-- **Spectator discovery** — *partial*. Live-games list (`/games/live` + `/watch`) ships; still to do:
-  spectator count, a separate spectator chat channel, and the rated ~15s broadcast delay (§14).
+- **Spectator discovery** — *partial*. Live-games list (`/games/live` + `/watch`) with a live spectator
+  count ships; still to do: a separate spectator chat channel and the rated ~15s broadcast delay (§14).
 
 ## Profile & settings
 - ~~**Rating history graph**~~ — shipped. `rating_history` table, sample per rated game end,

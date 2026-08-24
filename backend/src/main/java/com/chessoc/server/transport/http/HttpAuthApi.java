@@ -508,6 +508,7 @@ public final class HttpAuthApi {
             row.put("white", displayName(g.whiteId()));
             row.put("black", displayName(g.blackId()));
             row.put("variant", g.variant().name().toLowerCase());
+            row.put("spectators", g.spectatorCount());
             out.add(row);
         }
         send(x, 200, Map.of("games", out));

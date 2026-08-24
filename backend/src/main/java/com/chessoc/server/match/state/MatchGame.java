@@ -208,6 +208,18 @@ public final class MatchGame {
         }
     }
 
+    /** Subscribed viewers who are neither player (spectators currently connected). */
+    public int spectatorCount() {
+        lock.lock();
+        try {
+            return (int) subscribers.keySet().stream()
+                    .filter(id -> !id.equals(whiteId) && !id.equals(blackId))
+                    .count();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public void resync(String playerId, long lastKnownVersion) {
         lock.lock();
         try {
