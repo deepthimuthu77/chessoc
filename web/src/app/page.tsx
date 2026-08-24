@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { api, type ActiveGame, type OpenGame } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
@@ -17,7 +18,7 @@ const TIME_CONTROLS = [
 const VARIANTS = ['standard', 'crazyhouse'];
 
 export default function HomePage() {
-  const { account, token, ready, logout } = useAuth(true);
+  const { account, token, ready, isGuest, logout } = useAuth(true);
   const router = useRouter();
   const [tc, setTc] = useState(TIME_CONTROLS[2]);
   const [variant, setVariant] = useState('standard');
@@ -102,6 +103,18 @@ export default function HomePage() {
           </h1>
           <p className="mt-1 text-zinc-500">Choose a time control, then pick an opponent.</p>
         </motion.div>
+
+        {isGuest && (
+          <Link
+            href="/upgrade"
+            className="flex items-center justify-between rounded-2xl border border-blue-500/30 bg-blue-500/10 px-6 py-4 transition-colors hover:bg-blue-500/15"
+          >
+            <span className="text-sm text-zinc-200">
+              You&apos;re playing as a guest. Create an account to save your games and ratings.
+            </span>
+            <span className="text-sm font-bold text-blue-400">Create account →</span>
+          </Link>
+        )}
 
         {active.length > 0 && (
           <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">

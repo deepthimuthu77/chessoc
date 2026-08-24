@@ -156,6 +156,8 @@ export const api = {
   login: (email: string, password: string) =>
     request<Session>('/auth/login', 'POST', { email, password }),
   guest: () => request<Session>('/login', 'POST', {}),
+  upgrade: (username: string, email: string, password: string, token: string) =>
+    request<Session>('/auth/upgrade', 'POST', { username, email, password }, token),
   me: (token: string) => request<{ account: Account }>('/me', 'GET', undefined, token),
   heartbeat: (token: string) => request<{ ok: boolean }>('/heartbeat', 'POST', {}, token),
 

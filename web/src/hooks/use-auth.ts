@@ -55,6 +55,21 @@ export function useAuth(required = false) {
     [apply],
   );
 
+  const playAsGuest = useCallback(async () => apply(await api.guest()), [apply]);
+
+  const upgrade = useCallback(
+    async (username: string, email: string, password: string) => {
+      const current = token ?? getAuth()?.token;
+      if (!current) {
+        throw new Error('no guest session');
+      }
+      apply(await api.upgrade(username, email, password, current));
+    },
+    [apply, token],
+  );
+
+  const isGuest = !!account && account.id.startsWith('guest-');
+
   const logout = useCallback(() => {
     clearAuth();
     setAccount(null);
@@ -62,5 +77,5 @@ export function useAuth(required = false) {
     router.push('/login');
   }, [router]);
 
-  return { account, token, ready, login, register, logout };
+  return { account, token, ready, isGuest, login, register, playAsGuest, upgrade, logout };
 }

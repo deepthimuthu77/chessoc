@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginPage() {
-  const { login, register } = useAuth();
+  const { login, register, playAsGuest } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -71,6 +71,27 @@ export default function LoginPage() {
           className="mt-6 w-full text-center text-sm text-zinc-500 transition-colors hover:text-zinc-300"
         >
           {mode === 'login' ? 'No account? Register' : 'Have an account? Sign in'}
+        </button>
+
+        <div className="my-5 flex items-center gap-3 text-xs text-zinc-600">
+          <span className="h-px flex-1 bg-zinc-800" /> or <span className="h-px flex-1 bg-zinc-800" />
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setError(null);
+            setBusy(true);
+            try {
+              await playAsGuest();
+            } catch (err) {
+              setError((err as Error).message);
+              setBusy(false);
+            }
+          }}
+          className="w-full rounded-xl border border-zinc-700 px-8 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-60"
+        >
+          Continue as guest
         </button>
       </motion.div>
     </main>
