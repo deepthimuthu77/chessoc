@@ -5,7 +5,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, type JoinResult } from '@/lib/api';
 import { getAuth } from '@/lib/auth';
 import { getSettings } from '@/lib/settings';
 import { playMoveSound } from '@/lib/sound';
@@ -39,14 +39,18 @@ export interface PromotionPrompt {
 
 export function useGame(room: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [partnerState, partnerDispatch] = useReducer(reducer, initialState);
+  const [seat, setSeat] = useState<JoinResult | null>(null);
   const [color, setColor] = useState<Color | 'spectator' | null>(null);
   const [promotion, setPromotion] = useState<PromotionPrompt | null>(null);
   const [premove, setPremoveState] = useState<{ from: string; to: string } | null>(null);
   const [receivedAt, setReceivedAt] = useState(0);
+  const [partnerReceivedAt, setPartnerReceivedAt] = useState(0);
   const [, forceTick] = useState(0);
 
   const transportRef = useRef<LiveTransport | null>(null);
   const versionRef = useRef<number>(0);
+  const partnerVersionRef = useRef<number>(0);
   const prevMovesRef = useRef(0);
 
   useEffect(() => {
@@ -54,14 +58,20 @@ export function useGame(room: string) {
   }, [state.version]);
 
   useEffect(() => {
+    partnerVersionRef.current = Math.max(0, partnerState.version);
+  }, [partnerState.version]);
+
+  useEffect(() => {
     let cancelled = false;
     let transport: LiveTransport | null = null;
+    let partnerTransport: LiveTransport | null = null;
 
     (async () => {
       try {
         const token = getAuth()?.token ?? (await api.guest()).token;
         const seat = await api.join(room, token);
         if (cancelled) return;
+        setSeat(seat);
         setColor(seat.color);
         const { ticket } = await api.ticket(token);
         if (cancelled) return;
@@ -84,6 +94,23 @@ export function useGame(room: string) {
         }
         transportRef.current = transport;
         transport.start();
+
+        if (seat.partnerGameId) {
+          const partnerTicket = await api.ticket(token);
+          if (cancelled) return;
+          partnerTransport = new LiveTransport({
+            gameId: seat.partnerGameId,
+            ticket: partnerTicket.ticket,
+            freshTicket: async () => (await api.ticket(token)).ticket,
+            lastVersion: () => partnerVersionRef.current,
+            onEnvelope: (env) => {
+              setPartnerReceivedAt(Date.now());
+              partnerDispatch({ type: 'envelope', env });
+            },
+            onStatus: (status) => partnerDispatch({ type: 'status', status }),
+          });
+          partnerTransport.start();
+        }
       } catch {
         if (!cancelled) dispatch({ type: 'status', status: 'closed' });
       }
@@ -92,6 +119,7 @@ export function useGame(room: string) {
     return () => {
       cancelled = true;
       transport?.close();
+      partnerTransport?.close();
     };
   }, [room]);
 
@@ -187,6 +215,7 @@ export function useGame(room: string) {
   const rematch = useCallback(() => send(findRematch(state.capabilities)), [send, state.capabilities]);
 
   const snapshot = state.projection;
+  const partnerSnapshot = partnerState.projection;
   const myColor = color === 'spectator' ? null : color;
   const isPlayer = myColor != null;
   const isMyTurn = !!snapshot && !snapshot.result && isPlayer && snapshot.sideToMove === myColor;
@@ -216,10 +245,43 @@ export function useGame(room: string) {
   const youMaterial = materialScore(youCaptured);
   const oppMaterial = materialScore(oppCaptured);
 
-  const isCrazyhouse = !!snapshot && snapshot.fen.includes('[');
+  const isBughouse = seat?.variant === 'bughouse';
+  const isCrazyhouse = seat?.variant === 'crazyhouse';
+  const isDropVariant = isCrazyhouse || isBughouse;
   const yourHand = snapshot && myColor ? parseHand(snapshot.fen, myColor) : [];
   const oppHand = snapshot && myColor ? parseHand(snapshot.fen, other) : [];
   const dropTargets = interactive ? dropTargetsByPiece(state.capabilities) : {};
+
+  const partnerColor = seat?.partnerColor === 'white' || seat?.partnerColor === 'black'
+    ? seat.partnerColor
+    : null;
+  const partnerOther: Color = partnerColor === 'black' ? 'white' : 'black';
+  const partnerPieces = partnerSnapshot ? fenToPieces(partnerSnapshot.fen) : [];
+  const partnerClocks = partnerSnapshot
+    ? displayClocks(partnerSnapshot.clockSample, partnerReceivedAt, !partnerSnapshot.result)
+    : { white: '--:--', black: '--:--' };
+  const partnerOrientation: Color = getSettings().autoFlip && partnerColor === 'black' ? 'black' : 'white';
+  const partnerHand = partnerSnapshot && partnerColor ? parseHand(partnerSnapshot.fen, partnerColor) : [];
+  const partnerOppHand = partnerSnapshot && partnerColor ? parseHand(partnerSnapshot.fen, partnerOther) : [];
+  const partnerLastMove = partnerSnapshot ? lastMoveSquares(partnerSnapshot.moves) : null;
+  const partnerCheckSquare = partnerSnapshot?.inCheck
+    ? partnerPieces.find((p) => p.char === (partnerSnapshot.sideToMove === 'white' ? 'K' : 'k'))?.square ?? null
+    : null;
+  const seatsFilled = isBughouse
+    ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
+        partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId].filter(Boolean).length
+    : seat?.seatsFilled ?? 0;
+  const humansJoined = isBughouse
+    ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
+        partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId]
+        .filter((id) => id && !id.startsWith('engine')).length
+    : seat?.humansJoined ?? 0;
+  const chat = useMemo(
+    () => isBughouse
+      ? [...state.chat, ...partnerState.chat].sort((a, b) => a.serverTimestamp - b.serverTimestamp)
+      : state.chat,
+    [isBughouse, state.chat, partnerState.chat],
+  );
 
   const isVsEngine = !!snapshot && (snapshot.whitePlayerId === 'engine' || snapshot.blackPlayerId === 'engine');
   const caps = state.capabilities;
@@ -272,14 +334,40 @@ export function useGame(room: string) {
       score: Math.max(0, oppMaterial - youMaterial),
     },
     // chat
-    chat: state.chat,
+    chat,
     sendChat,
     // crazyhouse
     isCrazyhouse,
+    isBughouse,
+    isDropVariant,
+    roomId: seat?.roomId ?? room,
+    board: seat?.board ?? 'A',
+    team: seat?.team ?? '',
+    seatsFilled,
+    humansJoined,
+    humanTarget: seat?.humanTarget ?? (isBughouse ? 4 : 2),
     yourHand,
     oppHand,
     dropTargets,
     sendDrop,
+    partner: {
+      connected: !!partnerSnapshot,
+      pieces: partnerPieces,
+      lastMove: partnerLastMove,
+      checkSquare: partnerCheckSquare,
+      orientation: partnerOrientation,
+      history: partnerSnapshot?.moves ?? [],
+      yourHand: partnerHand,
+      oppHand: partnerOppHand,
+      you: {
+        name: partnerColor ? capitalize(partnerColor) : 'Partner',
+        clock: partnerColor === 'black' ? partnerClocks.black : partnerClocks.white,
+      },
+      opponent: {
+        name: partnerColor ? capitalize(partnerOther) : 'Opponent',
+        clock: partnerColor === 'black' ? partnerClocks.white : partnerClocks.black,
+      },
+    },
     // premove
     allowPremove,
     premove,

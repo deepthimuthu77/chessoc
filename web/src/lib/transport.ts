@@ -5,7 +5,7 @@ import { decode, encode, Envelope, MessageType } from './protocol';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE ?? 'ws://localhost:8081';
+const CONFIGURED_WS_BASE = process.env.NEXT_PUBLIC_WS_BASE;
 const PING_INTERVAL_MS = 20_000;
 const MAX_BACKOFF_MS = 30_000;
 
@@ -48,7 +48,8 @@ export class LiveTransport {
   private open(ticket: string, isReconnect: boolean): void {
     this.opts.onStatus(isReconnect ? 'reconnecting' : 'connecting');
     const query = `ticket=${encodeURIComponent(ticket)}&gameId=${encodeURIComponent(this.opts.gameId)}`;
-    const socket = new WebSocket(`${WS_BASE}/game?${query}`);
+    const wsBase = CONFIGURED_WS_BASE || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+    const socket = new WebSocket(`${wsBase}/game?${query}`);
     this.socket = socket;
 
     socket.onopen = () => {

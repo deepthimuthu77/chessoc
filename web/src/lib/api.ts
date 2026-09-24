@@ -1,6 +1,6 @@
 // HTTP client for the product API: auth, play, and the social layer. Base URL from NEXT_PUBLIC_API_BASE.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 
 async function request<T>(path: string, method: 'GET' | 'POST', body?: unknown, token?: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -30,8 +30,17 @@ export interface Session {
 }
 
 export interface JoinResult {
+  roomId: string;
   gameId: string;
+  partnerGameId: string;
+  board: 'A' | 'B' | 'spectator';
   color: 'white' | 'black' | 'spectator';
+  partnerColor: 'white' | 'black' | 'spectator';
+  team: 'blue' | 'red' | 'spectator' | '';
+  seatsFilled: number;
+  humansJoined: number;
+  humanTarget: number;
+  variant: 'standard' | 'crazyhouse' | 'bughouse';
 }
 
 export interface Friend {
@@ -99,6 +108,9 @@ export interface OpenGame {
   rated: boolean;
   minutes: number;
   increment: number;
+  seatsFilled?: number;
+  humansJoined?: number;
+  humanTarget?: number;
 }
 
 export interface GameHistoryRow {
@@ -137,6 +149,7 @@ export interface CreateOptions {
   rated?: boolean;
   vsEngine?: boolean;
   color?: 'white' | 'black';
+  humanPlayers?: number;
 }
 
 export interface SeekOptions {

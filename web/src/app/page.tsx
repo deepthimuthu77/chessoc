@@ -15,7 +15,7 @@ const TIME_CONTROLS = [
   { label: '10+5', minutes: 10, increment: 5, tag: 'Rapid' },
 ];
 
-const VARIANTS = ['standard', 'crazyhouse'];
+const VARIANTS = ['standard', 'crazyhouse', 'bughouse'];
 
 export default function HomePage() {
   const { account, token, ready, isGuest, logout } = useAuth(true);
@@ -24,6 +24,7 @@ export default function HomePage() {
   const [variant, setVariant] = useState('standard');
   const [rated, setRated] = useState(true);
   const [color, setColor] = useState<'white' | 'black'>('white');
+  const [bughouseHumans, setBughouseHumans] = useState(1);
   const [room, setRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<ActiveGame[]>([]);
@@ -64,7 +65,12 @@ export default function HomePage() {
     return <main className="min-h-screen bg-slate-950" />;
   }
 
-  async function create(extra: { vsEngine: boolean; color?: 'white' | 'black'; rated?: boolean }) {
+  async function create(extra: {
+    vsEngine: boolean;
+    color?: 'white' | 'black';
+    rated?: boolean;
+    humanPlayers?: number;
+  }) {
     setBusy(true);
     try {
       const { gameId } = await api.createGame(
@@ -90,6 +96,13 @@ export default function HomePage() {
   async function cancelSearch() {
     setSearching(false);
     await api.seekCancel(token!).catch(() => {});
+  }
+
+  function chooseVariant(next: string) {
+    setVariant(next);
+    if (next === 'bughouse') {
+      setRated(false);
+    }
   }
 
   return (
@@ -163,7 +176,7 @@ export default function HomePage() {
               <button
                 key={v}
                 type="button"
-                onClick={() => setVariant(v)}
+                onClick={() => chooseVariant(v)}
                 className={`rounded-xl px-4 py-2 text-sm font-bold capitalize transition-colors ${
                   variant === v ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
@@ -174,8 +187,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Quick match */}
-        <section className="flex flex-col items-center rounded-3xl border border-blue-500/30 bg-gradient-to-b from-blue-500/10 to-transparent p-8 shadow-xl sm:flex-row sm:justify-between">
+        {variant !== 'bughouse' && <section className="flex flex-col items-center rounded-3xl border border-blue-500/30 bg-gradient-to-b from-blue-500/10 to-transparent p-8 shadow-xl sm:flex-row sm:justify-between">
           <div className="mb-4 text-center sm:mb-0 sm:text-left">
             <h2 className="text-lg font-bold text-white">Quick match</h2>
             <p className="mt-1 text-sm text-zinc-400">
@@ -202,9 +214,73 @@ export default function HomePage() {
               Find opponent
             </button>
           )}
-        </section>
+        </section>}
 
-        <div className="grid gap-6 md:grid-cols-2">
+        {variant === 'bughouse' && (
+          <section className="border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
+            <div className="flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-white">Bughouse room</h2>
+                <p className="mt-1 text-sm text-zinc-500">Choose how many seats are controlled by people.</p>
+                <span className="mb-2 mt-6 block text-xs font-bold uppercase tracking-wider text-zinc-500">Human players</span>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 4].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setBughouseHumans(count)}
+                      className={`border px-3 py-2 text-sm font-bold ${
+                        bughouseHumans === count
+                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                      }`}
+                    >
+                      {count}H
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1">
+                <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Your color on Board A</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['white', 'black'] as const).map((choice) => (
+                    <button
+                      key={choice}
+                      type="button"
+                      onClick={() => setColor(choice)}
+                      className={`border px-4 py-2 text-sm font-bold capitalize ${
+                        color === choice
+                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                      }`}
+                    >
+                      {choice}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => create({
+                vsEngine: bughouseHumans < 4,
+                rated: false,
+                color,
+                humanPlayers: bughouseHumans,
+              })}
+              className="mt-7 w-full bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-500 disabled:opacity-60"
+            >
+              {bughouseHumans === 1
+                ? 'Play with three bots'
+                : bughouseHumans === 4
+                  ? 'Create four-player room'
+                  : `Create ${bughouseHumans}H + ${4 - bughouseHumans}AI room`}
+            </button>
+          </section>
+        )}
+
+        {variant !== 'bughouse' && <div className="grid gap-6 md:grid-cols-2">
           {/* vs Computer */}
           <section className="flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
             <h2 className="text-lg font-bold text-white">Play the Computer</h2>
@@ -238,30 +314,33 @@ export default function HomePage() {
 
           {/* vs Friend */}
           <section className="flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-            <h2 className="text-lg font-bold text-white">Play a Friend</h2>
-            <p className="mt-1 mb-5 text-sm text-zinc-500">Create a game and share the link.</p>
+            <h2 className="text-lg font-bold text-white">{variant === 'bughouse' ? 'Create team room' : 'Play a Friend'}</h2>
+            <p className="mt-1 mb-5 text-sm text-zinc-500">
+              {variant === 'bughouse' ? 'Four seats, two boards, one shared room.' : 'Create a game and share the link.'}
+            </p>
             <div className="mb-5">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Mode</span>
               <button
                 type="button"
+                disabled={variant === 'bughouse'}
                 onClick={() => setRated(!rated)}
                 className={`w-full rounded-xl border px-4 py-2 text-sm font-bold transition-colors ${
                   rated ? 'border-blue-500/40 text-blue-400' : 'border-zinc-700 text-zinc-400'
                 }`}
               >
-                {rated ? 'Rated' : 'Casual'}
+                {variant === 'bughouse' ? 'Team casual' : rated ? 'Rated' : 'Casual'}
               </button>
             </div>
             <button
               type="button"
               disabled={busy}
-              onClick={() => create({ vsEngine: false, rated })}
+              onClick={() => create({ vsEngine: false, rated: variant === 'bughouse' ? false : rated })}
               className="mt-auto rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-100 transition-colors hover:bg-zinc-800 disabled:opacity-60"
             >
-              Create game
+              {variant === 'bughouse' ? 'Create bughouse room' : 'Create game'}
             </button>
           </section>
-        </div>
+        </div>}
 
         {open.length > 0 && (
           <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
@@ -278,6 +357,9 @@ export default function HomePage() {
                     {g.creator}
                     <span className="ml-2 text-xs capitalize text-zinc-500">
                       {g.minutes}+{g.increment} · {g.variant} · {g.rated ? 'rated' : 'casual'}
+                      {g.variant === 'bughouse'
+                        ? ` · ${g.humansJoined ?? 0}/${g.humanTarget ?? 4} humans`
+                        : ''}
                     </span>
                   </span>
                   <span className="text-sm font-bold text-blue-400">Join</span>
