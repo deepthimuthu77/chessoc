@@ -129,6 +129,7 @@ public final class Lobby {
         MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, blackId, tc, rated));
         gameByRoom.put(gameId, gameId);
         wireStandard(gameId, game);
+        wireEngineSeat(game);
         persistStandard(gameId, game);
         return gameId;
     }
@@ -168,6 +169,15 @@ public final class Lobby {
         game.onStateChange(() -> persistStandard(roomId, game));
     }
 
+    private void wireEngineSeat(MatchGame game) {
+        if (ENGINE_ID.equals(game.whiteId())) {
+            game.setAi(Side.WHITE, aiMover());
+        }
+        if (ENGINE_ID.equals(game.blackId())) {
+            game.setAi(Side.BLACK, aiMover());
+        }
+    }
+
     private void restoreLiveRooms() {
         for (LiveRoomState state : liveRooms.loadAll()) {
             TimeControl tc = timeControl(state);
@@ -192,12 +202,7 @@ public final class Lobby {
                     board, state.savedAtEpochMs());
             gameByRoom.put(state.roomId(), game.gameId());
             wireStandard(state.roomId(), game);
-            if (ENGINE_ID.equals(game.whiteId())) {
-                game.setAi(Side.WHITE, aiMover());
-            }
-            if (ENGINE_ID.equals(game.blackId())) {
-                game.setAi(Side.BLACK, aiMover());
-            }
+            wireEngineSeat(game);
             game.resumeRecovered();
             persistStandard(state.roomId(), game);
         }

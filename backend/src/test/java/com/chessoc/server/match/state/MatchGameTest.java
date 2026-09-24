@@ -17,6 +17,7 @@ import com.chessoc.server.protocol.GameSnapshot;
 import com.chessoc.server.protocol.MessageType;
 import com.chessoc.server.protocol.Messages;
 import com.chessoc.server.session.Session;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -158,6 +159,31 @@ class MatchGameTest {
 
         assertThat(wSink.capability(CapabilityKind.ABORT)).isEmpty();
         assertThat(wSink.capability(CapabilityKind.RESIGN)).isPresent();
+    }
+
+    @Test
+    void humanRematchWaitsForBothPlayersAndSwapsColors() {
+        MatchGame game = newGame(foolsMateEngine(), new InMemoryMatchRepository(), new ManualScheduler());
+        List<String> rematchSeats = new ArrayList<>();
+        game.onRematch((newWhite, newBlack, variant, timeControl, rated) -> {
+            rematchSeats.add(newWhite);
+            rematchSeats.add(newBlack);
+            return "g2";
+        });
+
+        Capability abort = wSink.capability(CapabilityKind.ABORT).orElseThrow();
+        game.submit(white, new Messages.Intent("abort", abort.id(), Map.of(), 0));
+
+        Capability whiteRematch = wSink.capability(CapabilityKind.REMATCH).orElseThrow();
+        game.submit(white, new Messages.Intent("white-rematch", whiteRematch.id(), Map.of(), 0));
+        assertThat(rematchSeats).isEmpty();
+
+        Capability blackRematch = bSink.capability(CapabilityKind.REMATCH).orElseThrow();
+        game.submit(black, new Messages.Intent("black-rematch", blackRematch.id(), Map.of(), 0));
+
+        assertThat(rematchSeats).containsExactly("pB", "pW");
+        assertThat(wSink.messages).anyMatch(message -> MessageType.REMATCH_READY.equals(message.type()));
+        assertThat(bSink.messages).anyMatch(message -> MessageType.REMATCH_READY.equals(message.type()));
     }
 
     @Test

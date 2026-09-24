@@ -441,7 +441,9 @@ public final class MatchGame {
             return reject(intent, "rematch_unavailable");
         }
         rematchRequests.add(session.playerId());
-        if (blackId != null && rematchRequests.contains(whiteId) && rematchRequests.contains(blackId)) {
+        boolean whiteReady = rematchRequests.contains(whiteId) || aiMovers.containsKey(Side.WHITE);
+        boolean blackReady = rematchRequests.contains(blackId) || aiMovers.containsKey(Side.BLACK);
+        if (blackId != null && whiteReady && blackReady) {
             String newGameId = rematchFactory.create(blackId, whiteId, variant, timeControl, rated); // swap colours
             rematchRequests.clear();
             for (Subscriber sub : subscribers.values()) {
@@ -670,7 +672,7 @@ public final class MatchGame {
             } else {
                 caps.add(cap(sessionId, CapabilityKind.RESIGN, Map.of(), expiresAt));
             }
-            if (variant != Variant.BUGHOUSE) {
+            if (variant != Variant.BUGHOUSE && !aiMovers.containsKey(side.opponent())) {
                 if (pendingDrawOfferBy == null) {
                     caps.add(cap(sessionId, CapabilityKind.OFFER_DRAW, Map.of(), expiresAt));
                 } else if (!playerId.equals(pendingDrawOfferBy)) {
