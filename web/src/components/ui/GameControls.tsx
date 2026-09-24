@@ -6,6 +6,7 @@ interface GameControlsProps {
   active: boolean;
   canAbort: boolean;
   canOfferDraw: boolean;
+  showDraw?: boolean;
   drawOffer: 'none' | 'incoming' | 'sent';
   requireConfirm?: boolean;
   onResign: () => void;
@@ -18,6 +19,7 @@ export function GameControls({
   active,
   canAbort,
   canOfferDraw,
+  showDraw = true,
   drawOffer,
   requireConfirm = true,
   onResign,
@@ -93,14 +95,14 @@ export function GameControls({
           {confirmResign ? 'Confirm resign?' : 'Resign'}
         </button>
       )}
-      <button
+      {showDraw && <button
         type="button"
         disabled={!canOfferDraw}
         onClick={onOfferDraw}
         className="flex-1 rounded-xl border border-zinc-700 px-4 py-3 font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-default disabled:text-zinc-600 disabled:hover:bg-transparent"
       >
         {drawOffer === 'sent' ? 'Draw offered' : 'Offer Draw'}
-      </button>
+      </button>}
     </div>
   );
 }

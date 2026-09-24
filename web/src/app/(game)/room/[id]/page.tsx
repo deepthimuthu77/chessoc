@@ -20,7 +20,7 @@ export default function RoomPage() {
   const game = useGame(params.id, searchParams.get('seat'));
   const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
 
-  // both players accepted a rematch — the server created the new game
+  // The server creates the new game once the required players accept.
   useEffect(() => {
     if (game.rematchGameId) {
       router.push(`/room/${game.rematchGameId}`);
@@ -38,7 +38,9 @@ export default function RoomPage() {
 
   const lastPly = game.history[game.history.length - 1];
   const announcement = game.result
-    ? `Game over. ${game.result.winner ? game.result.winner + ' wins' : 'draw'} by ${game.result.kind}.`
+    ? game.result.kind === 'aborted'
+      ? 'Game aborted with no result.'
+      : `Game over. ${game.result.winner ? game.result.winner + ' wins' : 'draw'} by ${game.result.kind}.`
     : lastPly
       ? `Move ${game.history.length}: ${lastPly}${game.checkSquare ? ', check' : ''}.`
       : '';
@@ -68,6 +70,7 @@ export default function RoomPage() {
             active={game.active}
             canAbort={game.canAbort}
             canOfferDraw={game.canOfferDraw}
+            showDraw={!game.isVsEngine}
             drawOffer={game.drawOffer}
             requireConfirm={game.confirmResign}
             onResign={game.resign}
@@ -112,6 +115,7 @@ export default function RoomPage() {
             isOpen={!!game.result}
             result={game.result}
             onRematch={game.canRematch ? game.rematch : undefined}
+            rematchPending={game.rematchPending}
           />
           <PromotionPicker
             open={!!game.promotion}
@@ -211,6 +215,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
             active={game.active && ready}
             canAbort={game.canAbort}
             canOfferDraw={false}
+            showDraw={false}
             drawOffer="none"
             requireConfirm={game.confirmResign}
             onResign={game.resign}
