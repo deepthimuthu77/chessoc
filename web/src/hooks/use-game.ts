@@ -47,6 +47,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const [premove, setPremoveState] = useState<{ from: string; to: string } | null>(null);
   const [receivedAt, setReceivedAt] = useState(0);
   const [partnerReceivedAt, setPartnerReceivedAt] = useState(0);
+  const [rematchRequestRoom, setRematchRequestRoom] = useState<string | null>(null);
   const [, forceTick] = useState(0);
 
   const transportRef = useRef<LiveTransport | null>(null);
@@ -217,7 +218,12 @@ export function useGame(room: string, preferredSeat?: string | null) {
     (accept: boolean) => send(findDrawResponse(state.capabilities, accept)),
     [send, state.capabilities],
   );
-  const rematch = useCallback(() => send(findRematch(state.capabilities)), [send, state.capabilities]);
+  const rematch = useCallback(() => {
+    const capability = findRematch(state.capabilities);
+    if (!capability) return;
+    setRematchRequestRoom(room);
+    send(capability);
+  }, [room, send, state.capabilities]);
 
   const snapshot = state.projection;
   const partnerSnapshot = partnerState.projection;
@@ -401,6 +407,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
     offerDraw,
     respondDraw,
     rematch,
+    rematchPending: rematchRequestRoom === room,
     rematchGameId: state.rematchGameId,
     // control state
     active,

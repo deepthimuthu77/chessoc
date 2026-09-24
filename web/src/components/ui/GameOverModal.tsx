@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 import { prefersReducedMotion } from '@/lib/settings';
 
 interface GameOverModalProps {
@@ -12,9 +13,10 @@ interface GameOverModalProps {
       }
     | undefined;
   onRematch?: () => void;
+  rematchPending?: boolean;
 }
 
-export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps) {
+export function GameOverModal({ isOpen, result, onRematch, rematchPending = false }: GameOverModalProps) {
   const reduce = prefersReducedMotion();
   return (
     <AnimatePresence>
@@ -25,7 +27,7 @@ export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps)
           aria-label="Game over"
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           initial={{ opacity: 0 }}
         >
           <motion.div
@@ -49,15 +51,24 @@ export function GameOverModal({ isOpen, result, onRematch }: GameOverModalProps)
               )}
             </p>
 
-            {onRematch && (
+            <div className="flex w-full flex-col gap-3">
+              {onRematch && (
               <button
                 type="button"
+                disabled={rematchPending}
                 onClick={onRematch}
-                className="w-full rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-colors hover:bg-blue-500"
+                className="w-full rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-colors hover:bg-blue-500 disabled:cursor-wait disabled:bg-blue-800 disabled:text-blue-200"
               >
-                Play Again
+                {rematchPending ? 'Rematch requested' : 'Play Again'}
               </button>
-            )}
+              )}
+              <Link
+                href="/"
+                className="w-full rounded-xl border border-zinc-700 px-8 py-3 text-center font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
+              >
+                Back to lobby
+              </Link>
+            </div>
           </motion.div>
         </motion.div>
       )}
