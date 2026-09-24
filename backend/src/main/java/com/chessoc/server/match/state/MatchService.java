@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Owns the live games. Each match is created here and reached only through its {@link MatchGame}. */
 public final class MatchService {
@@ -33,6 +34,12 @@ public final class MatchService {
 
     public MatchGame create(GameSpec spec) {
         MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids);
+        games.put(spec.gameId(), game);
+        return game;
+    }
+
+    MatchGame createHeld(GameSpec spec, ReentrantLock matchLock) {
+        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids, matchLock, true);
         games.put(spec.gameId(), game);
         return game;
     }

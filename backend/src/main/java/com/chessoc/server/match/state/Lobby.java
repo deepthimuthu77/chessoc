@@ -29,7 +29,9 @@ public final class Lobby {
     /** Sentinel account id for the engine opponent. */
     public static final String ENGINE_ID = "engine";
 
-    public record Seat(String gameId, String color) {
+    public record Seat(String roomId, String gameId, String partnerGameId, String board,
+                       String color, String partnerColor, String team, int seatsFilled,
+                       int humansJoined, int humanTarget, String variant) {
     }
 
     private final MatchService matches;
@@ -39,6 +41,7 @@ public final class Lobby {
     private final TimeControl casualTimeControl;
     private final LongSupplier clock;
     private final Map<String, String> gameByRoom = new ConcurrentHashMap<>();
+    private final Map<String, BughouseMatch> bughouseByRoom = new ConcurrentHashMap<>();
 
     public Lobby(MatchService matches, RatingService ratings, GamesRepository games, SearchClient engine,
                  TimeControl casualTimeControl, LongSupplier clock) {
@@ -52,6 +55,9 @@ public final class Lobby {
 
     /** Create a casual game against the engine; the human takes {@code humanColor}, the engine the other. */
     public synchronized String createVsEngine(String humanId, Variant variant, TimeControl tc, Side humanColor) {
+        if (variant == Variant.BUGHOUSE) {
+            return createBughouse(humanId, tc, humanColor, 1);
+        }
         String gameId = UUID.randomUUID().toString();
         Fen start = Fen.parse(variant == Variant.STANDARD ? STANDARD_START : CRAZYHOUSE_START);
         String whiteId = humanColor == Side.WHITE ? humanId : ENGINE_ID;
@@ -66,17 +72,28 @@ public final class Lobby {
 
     /** Join a casual room by name: first joiner is White, next distinct joiner claims Black. */
     public synchronized Seat join(String room, String playerId) {
+        BughouseMatch bughouse = bughouseByRoom.get(room);
+        if (bughouse != null) {
+            BughouseMatch.Seat seat = bughouse.join(playerId);
+            return new Seat(seat.roomId(), seat.gameId(), seat.partnerGameId(), seat.board(),
+                    seat.color(), seat.partnerColor(), seat.team(), seat.seatsFilled(),
+                    seat.humansJoined(), seat.humanTarget(), "bughouse");
+        }
         String gameId = gameByRoom.get(room);
         if (gameId == null) {
             gameId = spawn(UUID.randomUUID().toString(), playerId, Variant.STANDARD, casualTimeControl, false);
             gameByRoom.put(room, gameId);
-            return new Seat(gameId, "white");
+            return standardSeat(room, gameId, "white");
         }
-        return new Seat(gameId, matches.get(gameId).orElseThrow().seatFor(playerId));
+        MatchGame game = matches.get(gameId).orElseThrow();
+        return standardSeat(room, gameId, game.seatFor(playerId));
     }
 
     /** Create a game with a known creator as White and an open Black seat; returns its id (also its room). */
     public synchronized String create(String creatorId, Variant variant, TimeControl timeControl, boolean rated) {
+        if (variant == Variant.BUGHOUSE) {
+            return createBughouse(creatorId, timeControl, Side.WHITE, 4);
+        }
         String gameId = spawn(UUID.randomUUID().toString(), creatorId, variant, timeControl, rated);
         gameByRoom.put(gameId, gameId);
         return gameId;
@@ -93,6 +110,9 @@ public final class Lobby {
     /** Create a game with both seats pre-assigned (rematch or a matchmaking pairing); returns its id. */
     public synchronized String createPaired(String whiteId, String blackId, Variant variant,
                                             TimeControl tc, boolean rated) {
+        if (variant == Variant.BUGHOUSE) {
+            throw new IllegalArgumentException("bughouse matchmaking requires four players");
+        }
         String gameId = UUID.randomUUID().toString();
         Fen start = Fen.parse(variant == Variant.STANDARD ? STANDARD_START : CRAZYHOUSE_START);
         MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, blackId, tc, rated));
@@ -121,5 +141,56 @@ public final class Lobby {
         if (game.rated() && black != null) {
             ratings.applyResult(white, black, variant, speed, result);
         }
+    }
+
+    public boolean isPrimaryBughouseBoard(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match != null && match.boardA().gameId().equals(gameId);
+    }
+
+    public int bughouseSeatsFilled(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match == null ? 0 : match.seatsFilled();
+    }
+
+    public int bughouseHumansJoined(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match == null ? 0 : match.humansJoined();
+    }
+
+    public int bughouseHumanTarget(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match == null ? 0 : match.humanTarget();
+    }
+
+    public boolean isBughouseParticipant(String gameId, String playerId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match != null && match.isParticipant(playerId);
+    }
+
+    public synchronized String createBughouse(String creatorId, TimeControl timeControl,
+                                              Side creatorColor, int humanPlayers) {
+        String roomId = UUID.randomUUID().toString();
+        MatchGame.AiMover mover = (variant, fen) -> engine.bestMove(
+                variant, fen, SearchBudget.movetime(600)).bestMove();
+        BughouseMatch match = new BughouseMatch(roomId, matches, Fen.parse(CRAZYHOUSE_START),
+                timeControl, creatorId, creatorColor, humanPlayers,
+                humanPlayers < 4 ? mover : null, this::onComplete);
+        bughouseByRoom.put(roomId, match);
+        bughouseByRoom.put(match.boardA().gameId(), match);
+        bughouseByRoom.put(match.boardB().gameId(), match);
+        return roomId;
+    }
+
+    public String bughouseRoomId(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match == null ? gameId : match.roomId();
+    }
+
+    private Seat standardSeat(String room, String gameId, String color) {
+        MatchGame game = matches.get(gameId).orElseThrow();
+        return new Seat(room, gameId, "", "A", color, "", "",
+                game.blackId() == null ? 1 : 2, game.blackId() == null ? 1 : 2, 2,
+                game.variant().name().toLowerCase());
     }
 }

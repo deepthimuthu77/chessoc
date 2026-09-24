@@ -3,12 +3,14 @@ package com.chessoc.server.match.state;
 import com.chessoc.server.capability.Capability;
 import com.chessoc.server.capability.CapabilityKind;
 import com.chessoc.server.domain.Fen;
+import com.chessoc.server.domain.PieceType;
 import com.chessoc.server.domain.Side;
 import com.chessoc.server.domain.Uci;
 import com.chessoc.server.domain.Variant;
 import com.chessoc.server.engine.ApplyResult;
 import com.chessoc.server.engine.ValidatorClient;
 import com.chessoc.server.match.Clock;
+import com.chessoc.server.match.Reserve;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.protocol.ClockSample;
 import com.chessoc.server.protocol.Disposition;
@@ -49,10 +51,10 @@ public final class MatchGame {
     private final String gameId;
     private final Variant variant;
     private final Fen initialFen;
-    private final String whiteId;
+    private String whiteId;
     private String blackId;
 
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock lock;
     private final List<Uci> moves = new ArrayList<>();
     private final EnumMap<Side, Clock> clocks = new EnumMap<>(Side.class);
     private final Map<String, Subscriber> subscribers = new LinkedHashMap<>();
@@ -62,8 +64,8 @@ public final class MatchGame {
     private final List<String> capturedByBlack = new ArrayList<>();
     private final java.util.Set<String> rematchRequests = new java.util.HashSet<>();
     private RematchFactory rematchFactory;
-    private Side aiSide;
-    private AiMover aiMover;
+    private final EnumMap<Side, AiMover> aiMovers = new EnumMap<>(Side.class);
+    private java.util.function.BiConsumer<Side, PieceType> captureListener;
 
     private final boolean rated;
     private final TimeControl timeControl;
@@ -76,14 +78,24 @@ public final class MatchGame {
     private boolean inCheck;
     private String pendingDrawOfferBy;
     private Scheduler.Cancellable flagTimer;
+    private boolean startHeld;
+    private boolean started;
 
     public MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
                      Scheduler scheduler, LongSupplier clock, Supplier<String> ids) {
+        this(spec, engine, repository, scheduler, clock, ids, new ReentrantLock(), false);
+    }
+
+    MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
+              Scheduler scheduler, LongSupplier clock, Supplier<String> ids,
+              ReentrantLock lock, boolean startHeld) {
         this.engine = engine;
         this.repository = repository;
         this.scheduler = scheduler;
         this.clock = clock;
         this.ids = ids;
+        this.lock = lock;
+        this.startHeld = startHeld;
         this.gameId = spec.gameId();
         this.variant = spec.variant();
         this.initialFen = spec.initialFen();
@@ -96,7 +108,10 @@ public final class MatchGame {
         clocks.put(Side.WHITE, Clock.start(tc));
         clocks.put(Side.BLACK, Clock.start(tc));
         this.turnStartMs = clock.getAsLong();
-        rescheduleFlag();
+        this.started = !startHeld && whiteId != null && blackId != null;
+        if (started) {
+            rescheduleFlag();
+        }
     }
 
     public String gameId() {
@@ -132,6 +147,10 @@ public final class MatchGame {
         this.completionListener = listener;
     }
 
+    public void onCapture(java.util.function.BiConsumer<Side, PieceType> listener) {
+        this.captureListener = listener;
+    }
+
     /** Creates the rematch game (colours swapped) once both players accept. */
     public interface RematchFactory {
         String create(String whiteId, String blackId, Variant variant, TimeControl timeControl, boolean rated);
@@ -150,8 +169,7 @@ public final class MatchGame {
     public void setAi(Side side, AiMover mover) {
         lock.lock();
         try {
-            this.aiSide = side;
-            this.aiMover = mover;
+            aiMovers.put(side, mover);
             maybeScheduleAi();
         } finally {
             lock.unlock();
@@ -187,11 +205,79 @@ public final class MatchGame {
             if (playerId.equals(whiteId)) {
                 return "white";
             }
+            if (whiteId == null) {
+                whiteId = playerId;
+                startIfReady();
+                return "white";
+            }
             if (blackId == null) {
                 blackId = playerId;
+                startIfReady();
                 return "black";
             }
             return playerId.equals(blackId) ? "black" : "spectator";
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void assignSeat(Side side, String playerId) {
+        lock.lock();
+        try {
+            String current = side == Side.WHITE ? whiteId : blackId;
+            if (current != null && !current.equals(playerId)) {
+                throw new IllegalStateException(side + " seat already occupied");
+            }
+            if (side == Side.WHITE) {
+                whiteId = playerId;
+            } else {
+                blackId = playerId;
+            }
+            startIfReady();
+            if (!started) {
+                broadcastAll();
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void start() {
+        lock.lock();
+        try {
+            startHeld = false;
+            startIfReady();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void injectReserve(Side recipient, PieceType piece) {
+        lock.lock();
+        try {
+            if (variant != Variant.BUGHOUSE || result != null) {
+                return;
+            }
+            Reserve reserve = Reserve.parse(currentFen.reserve().orElse(""));
+            reserve.add(recipient, piece);
+            currentFen = currentFen.withReserve(reserve.encode());
+            version++;
+            reissueAllCaps();
+            broadcastAll();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void finishFromPartner(GameResult partnerResult) {
+        lock.lock();
+        try {
+            if (result != null) {
+                return;
+            }
+            endGame(partnerResult);
+            reissueAllCaps();
+            broadcastAll();
         } finally {
             lock.unlock();
         }
@@ -311,7 +397,9 @@ public final class MatchGame {
             return reject(intent, "not_your_turn");
         }
         Uci uci = cap.moveUci();
-        ApplyResult applied = engine.apply(variant, initialFen, moves, uci);
+        Fen base = variant == Variant.BUGHOUSE ? currentFen : initialFen;
+        List<Uci> history = variant == Variant.BUGHOUSE ? List.of() : moves;
+        ApplyResult applied = engine.apply(variant, base, history, uci);
         if (!applied.legal()) {
             return reject(intent, applied.reason().orElse("illegal_move"));
         }
@@ -334,6 +422,9 @@ public final class MatchGame {
             } else {
                 capturedByBlack.add(String.valueOf(Character.toUpperCase(pt.symbol())));
             }
+            if (captureListener != null) {
+                captureListener.accept(mover, pt);
+            }
         });
         repository.append(gameId, new PersistedPly(version, currentFen, uci));
 
@@ -350,7 +441,7 @@ public final class MatchGame {
     }
 
     private void maybeScheduleAi() {
-        if (result == null && aiSide != null && sideToMove() == aiSide) {
+        if (started && result == null && aiMovers.containsKey(sideToMove())) {
             scheduler.schedule(this::playAi, AI_MOVE_DELAY_MS);
         }
     }
@@ -358,11 +449,15 @@ public final class MatchGame {
     private void playAi() {
         lock.lock();
         try {
-            if (result != null || aiMover == null || sideToMove() != aiSide) {
+            Side aiSide = sideToMove();
+            AiMover aiMover = aiMovers.get(aiSide);
+            if (result != null || aiMover == null) {
                 return;
             }
             Uci uci = aiMover.bestMove(variant, currentFen);
-            ApplyResult applied = engine.apply(variant, initialFen, moves, uci);
+            Fen base = variant == Variant.BUGHOUSE ? currentFen : initialFen;
+            List<Uci> history = variant == Variant.BUGHOUSE ? List.of() : moves;
+            ApplyResult applied = engine.apply(variant, base, history, uci);
             if (!applied.legal()) {
                 return;
             }
@@ -466,6 +561,9 @@ public final class MatchGame {
     }
 
     private List<String> seatedPlayers() {
+        if (whiteId == null) {
+            return blackId == null ? List.of() : List.of(blackId);
+        }
         return blackId == null ? List.of(whiteId) : List.of(whiteId, blackId);
     }
 
@@ -488,10 +586,15 @@ public final class MatchGame {
         List<Capability> caps = new ArrayList<>();
 
         if (result != null) {
-            caps.add(cap(sessionId, CapabilityKind.REMATCH, Map.of("opponentId", opponentOf(playerId)), expiresAt));
-        } else {
+            if (variant != Variant.BUGHOUSE) {
+                caps.add(cap(sessionId, CapabilityKind.REMATCH,
+                        Map.of("opponentId", opponentOf(playerId)), expiresAt));
+            }
+        } else if (started) {
             if (side == sideToMove()) {
-                for (Uci uci : engine.legalMoves(variant, initialFen, moves)) {
+                Fen base = variant == Variant.BUGHOUSE ? currentFen : initialFen;
+                List<Uci> history = variant == Variant.BUGHOUSE ? List.of() : moves;
+                for (Uci uci : engine.legalMoves(variant, base, history)) {
                     caps.add(cap(sessionId, CapabilityKind.MOVE, Map.of("uci", uci.value()), expiresAt));
                 }
             }
@@ -500,11 +603,13 @@ public final class MatchGame {
             } else {
                 caps.add(cap(sessionId, CapabilityKind.RESIGN, Map.of(), expiresAt));
             }
-            if (pendingDrawOfferBy == null) {
-                caps.add(cap(sessionId, CapabilityKind.OFFER_DRAW, Map.of(), expiresAt));
-            } else if (!playerId.equals(pendingDrawOfferBy)) {
-                caps.add(cap(sessionId, CapabilityKind.RESPOND_DRAW, Map.of("accept", "true"), expiresAt));
-                caps.add(cap(sessionId, CapabilityKind.RESPOND_DRAW, Map.of("accept", "false"), expiresAt));
+            if (variant != Variant.BUGHOUSE) {
+                if (pendingDrawOfferBy == null) {
+                    caps.add(cap(sessionId, CapabilityKind.OFFER_DRAW, Map.of(), expiresAt));
+                } else if (!playerId.equals(pendingDrawOfferBy)) {
+                    caps.add(cap(sessionId, CapabilityKind.RESPOND_DRAW, Map.of("accept", "true"), expiresAt));
+                    caps.add(cap(sessionId, CapabilityKind.RESPOND_DRAW, Map.of("accept", "false"), expiresAt));
+                }
             }
         }
         caps.forEach(c -> currentCaps.put(c.id(), c));
@@ -563,7 +668,7 @@ public final class MatchGame {
 
     private void rescheduleFlag() {
         cancelFlag();
-        if (result != null) {
+        if (result != null || !started) {
             return;
         }
         Side side = sideToMove();
@@ -602,14 +707,14 @@ public final class MatchGame {
 
     private GameSnapshot snapshot() {
         long now = now();
-        boolean live = result == null;
+        boolean live = result == null && started;
         long white = clocks.get(Side.WHITE).remainingMs()
                 - (live && sideToMove() == Side.WHITE ? now - turnStartMs : 0);
         long black = clocks.get(Side.BLACK).remainingMs()
                 - (live && sideToMove() == Side.BLACK ? now - turnStartMs : 0);
         ClockSample sample = new ClockSample(white, black, sideToMove(), now);
         return new GameSnapshot(gameId, version, initialFen, currentFen, sideToMove(),
-                List.copyOf(moves), sample, Optional.ofNullable(result), whiteId,
+                List.copyOf(moves), sample, Optional.ofNullable(result), whiteId == null ? "" : whiteId,
                 blackId == null ? "" : blackId, inCheck, List.copyOf(capturedByWhite), List.copyOf(capturedByBlack));
     }
 
@@ -618,7 +723,7 @@ public final class MatchGame {
     }
 
     private Side playerSide(String playerId) {
-        if (whiteId.equals(playerId)) {
+        if (playerId.equals(whiteId)) {
             return Side.WHITE;
         }
         if (playerId.equals(blackId)) {
@@ -628,8 +733,20 @@ public final class MatchGame {
     }
 
     private String opponentOf(String playerId) {
-        String opponent = whiteId.equals(playerId) ? blackId : whiteId;
+        String opponent = playerId.equals(whiteId) ? blackId : whiteId;
         return opponent == null ? "" : opponent;
+    }
+
+    private void startIfReady() {
+        if (started || startHeld || result != null || whiteId == null || blackId == null) {
+            return;
+        }
+        started = true;
+        turnStartMs = now();
+        rescheduleFlag();
+        reissueAllCaps();
+        broadcastAll();
+        maybeScheduleAi();
     }
 
     private long now() {

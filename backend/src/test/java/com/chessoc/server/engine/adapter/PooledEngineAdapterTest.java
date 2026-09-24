@@ -10,6 +10,7 @@ import com.chessoc.server.domain.Variant;
 import com.chessoc.server.engine.ApplyResult;
 import com.chessoc.server.engine.EngineErrorCode;
 import com.chessoc.server.engine.EngineException;
+import com.chessoc.server.engine.SearchBudget;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +56,19 @@ class PooledEngineAdapterTest {
         adapter.legalMoves(Variant.BUGHOUSE, START, List.of());
 
         assertThat(seen.get()).contains("setoption name DrawRules value variant");
+    }
+
+    @Test
+    void searchRequestsJsonReplyMode() {
+        AtomicReference<String> seen = new AtomicReference<>();
+        PooledEngineAdapter adapter = adapter(1, payload -> {
+            seen.set(payload);
+            return "{\"bestMove\":\"e2e4\",\"score\":{\"cp\":12},\"pv\":[\"e2e4\"],\"depth\":4}";
+        });
+
+        adapter.bestMove(Variant.CRAZYHOUSE, START, SearchBudget.movetime(100));
+
+        assertThat(seen.get()).contains("setoption name SearchJson value true");
     }
 
     @Test

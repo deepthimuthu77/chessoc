@@ -57,13 +57,27 @@ services:
       context: ../web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE: http://localhost:8080
-        NEXT_PUBLIC_WS_BASE: ws://localhost:8081
+        NEXT_PUBLIC_API_BASE: /api
+        NEXT_PUBLIC_WS_BASE: ""
     depends_on:
       - server
     # Host 3001 so the prod build can run alongside `npm run dev` (host 3000).
     ports:
       - "3001:3000"
 
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - web
+      - server
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

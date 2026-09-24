@@ -216,7 +216,19 @@ public final class HttpAuthApi {
         }
         Lobby.Seat seat = s.lobby().join(room, token.playerId());
         s.presence().enterGame(token.playerId(), seat.gameId());
-        send(x, 200, Map.of("gameId", seat.gameId(), "color", seat.color()));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("roomId", seat.roomId());
+        payload.put("gameId", seat.gameId());
+        payload.put("partnerGameId", seat.partnerGameId());
+        payload.put("board", seat.board());
+        payload.put("color", seat.color());
+        payload.put("partnerColor", seat.partnerColor());
+        payload.put("team", seat.team());
+        payload.put("seatsFilled", seat.seatsFilled());
+        payload.put("humansJoined", seat.humansJoined());
+        payload.put("humanTarget", seat.humanTarget());
+        payload.put("variant", seat.variant());
+        send(x, 200, payload);
     }
 
     private void playCreate(HttpExchange x) throws IOException {
@@ -230,11 +242,16 @@ public final class HttpAuthApi {
         long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
         TimeControl tc = TimeControl.fischer(baseMs, incMs);
         String gameId;
-        if (b.path("vsEngine").asBoolean(false)) {
+        if (variant == Variant.BUGHOUSE) {
+            Side humanColor = "black".equalsIgnoreCase(b.path("color").asText("white")) ? Side.BLACK : Side.WHITE;
+            int humanPlayers = Math.max(1, Math.min(4, b.path("humanPlayers").asInt(4)));
+            gameId = s.lobby().createBughouse(token.playerId(), tc, humanColor, humanPlayers);
+        } else if (b.path("vsEngine").asBoolean(false)) {
             Side humanColor = "black".equalsIgnoreCase(b.path("color").asText("white")) ? Side.BLACK : Side.WHITE;
             gameId = s.lobby().createVsEngine(token.playerId(), variant, tc, humanColor);
         } else {
-            gameId = s.lobby().create(token.playerId(), variant, tc, b.path("rated").asBoolean(true));
+            boolean rated = variant != Variant.BUGHOUSE && b.path("rated").asBoolean(true);
+            gameId = s.lobby().create(token.playerId(), variant, tc, rated);
         }
         send(x, 200, Map.of("gameId", gameId));
     }
@@ -248,6 +265,10 @@ public final class HttpAuthApi {
         }
         JsonNode b = read(x);
         Variant variant = Variant.valueOf(b.path("variant").asText("standard").toUpperCase());
+        if (variant == Variant.BUGHOUSE) {
+            send(x, 400, Map.of("error", "use a four-player room for bughouse"));
+            return;
+        }
         long baseMs = Math.max(1, b.path("minutes").asInt(5)) * 60_000L;
         long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
         String gameId = s.seeks().seek(token.playerId(), variant, TimeControl.fischer(baseMs, incMs));
@@ -443,7 +464,7 @@ public final class HttpAuthApi {
         for (GameRecord g : s.games().forAccount(me, 25)) {
             String opponentId = me.equals(g.whiteId()) ? g.blackId() : g.whiteId();
             String opponent = opponentId == null ? "?"
-                    : Lobby.ENGINE_ID.equals(opponentId) ? "Computer"
+                    : opponentId.startsWith(Lobby.ENGINE_ID) ? "Computer"
                     : s.accounts().findById(opponentId).map(Account::username).orElse("guest");
             String result = "DRAW".equals(g.resultType()) ? "draw"
                     : me.equals(g.winnerAccountId()) ? "win" : "loss";
@@ -470,7 +491,7 @@ public final class HttpAuthApi {
         for (MatchGame g : s.matches().activeFor(me)) {
             String opponentId = me.equals(g.whiteId()) ? g.blackId() : g.whiteId();
             String opponent = opponentId == null ? "waiting"
-                    : Lobby.ENGINE_ID.equals(opponentId) ? "Computer"
+                    : opponentId.startsWith(Lobby.ENGINE_ID) ? "Computer"
                     : s.accounts().findById(opponentId).map(Account::username).orElse("guest");
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("gameId", g.gameId());
@@ -525,11 +546,14 @@ public final class HttpAuthApi {
     private void gamesLive(HttpExchange x) throws IOException {
         List<Map<String, Object>> out = new ArrayList<>();
         for (MatchGame g : s.matches().liveGames()) {
+            if (g.variant() == Variant.BUGHOUSE && !s.lobby().isPrimaryBughouseBoard(g.gameId())) {
+                continue;
+            }
             if (g.blackId() == null) {
                 continue; // still waiting for an opponent
             }
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("gameId", g.gameId());
+            row.put("gameId", s.lobby().bughouseRoomId(g.gameId()));
             row.put("white", displayName(g.whiteId()));
             row.put("black", displayName(g.blackId()));
             row.put("variant", g.variant().name().toLowerCase());
@@ -547,6 +571,27 @@ public final class HttpAuthApi {
         String me = token.playerId();
         List<Map<String, Object>> out = new ArrayList<>();
         for (MatchGame g : s.matches().liveGames()) {
+            if (g.variant() == Variant.BUGHOUSE && !s.lobby().isPrimaryBughouseBoard(g.gameId())) {
+                continue;
+            }
+            if (g.variant() == Variant.BUGHOUSE) {
+                int seats = s.lobby().bughouseSeatsFilled(g.gameId());
+                if (seats >= 4 || s.lobby().isBughouseParticipant(g.gameId(), me)) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("gameId", s.lobby().bughouseRoomId(g.gameId()));
+                row.put("creator", displayName(g.whiteId()));
+                row.put("variant", "bughouse");
+                row.put("rated", false);
+                row.put("minutes", (int) (g.timeControl().baseMs() / 60_000));
+                row.put("increment", (int) (g.timeControl().incrementMs() / 1_000));
+                row.put("seatsFilled", seats);
+                row.put("humansJoined", s.lobby().bughouseHumansJoined(g.gameId()));
+                row.put("humanTarget", s.lobby().bughouseHumanTarget(g.gameId()));
+                out.add(row);
+                continue;
+            }
             if (g.blackId() != null || Lobby.ENGINE_ID.equals(g.whiteId()) || me.equals(g.whiteId())) {
                 continue; // seat taken, an engine game, or the viewer's own challenge
             }
@@ -594,7 +639,7 @@ public final class HttpAuthApi {
         if (id == null) {
             return "waiting";
         }
-        if (Lobby.ENGINE_ID.equals(id)) {
+        if (id.startsWith(Lobby.ENGINE_ID)) {
             return "Computer";
         }
         return s.accounts().findById(id).map(Account::username).orElse("guest");

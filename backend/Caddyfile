@@ -1,0 +1,17 @@
+:80 {
+	encode zstd gzip
+
+	route {
+		handle_path /api/* {
+			reverse_proxy server:8080
+		}
+
+		handle /game* {
+			reverse_proxy server:8081
+		}
+
+		handle {
+			reverse_proxy web:3000
+		}
+	}
+}

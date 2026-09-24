@@ -57,6 +57,11 @@ public record Fen(
         return reserve.isPresent();
     }
 
+    public Fen withReserve(String newReserve) {
+        return parse(board + "[" + newReserve + "] " + sideToMove.toFen() + " " + castling + " "
+                + enPassant + " " + halfmoveClock + " " + fullmoveNumber);
+    }
+
     /** A standard-variant position must not carry a reserve bracket; a drop variant reads it as its hand. */
     public void requireConsistentWith(Variant variant) {
         if (!variant.isDrop() && hasReserve()) {
