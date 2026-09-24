@@ -1,4 +1,10 @@
-:80 {
+{
+	on_demand_tls {
+		ask http://server:8080/internal/tls-allow
+	}
+}
+
+(chessoc_proxy) {
 	encode zstd gzip
 
 	route {
@@ -14,4 +20,17 @@
 			reverse_proxy web:3000
 		}
 	}
+}
+
+http:// {
+	import chessoc_proxy
+}
+
+# With no DNS name available, issue a certificate for the requested LAN IP from
+# Caddy's local CA. The root certificate is persisted under ./caddy-data.
+https:// {
+	tls internal {
+		on_demand
+	}
+	import chessoc_proxy
 }

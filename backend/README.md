@@ -15,6 +15,11 @@ Brings up Postgres, the engine service, the server (HTTP 8080, WSS 8081), and a 
 validator line protocol: with no binary it runs a correct dev engine (python-chess, standard +
 crazyhouse); to use the real vector64 binary, mount it and set `ENGINE_CMD` in `docker-compose.yml`.
 
+Caddy serves the complete app on both `http://<host-ip>` and `https://<host-ip>`. With no DNS name,
+HTTPS uses Caddy's local CA and creates a certificate for the requested LAN IP. After the first HTTPS
+request, install `caddy-data/caddy/pki/authorities/local/root.crt` as a trusted root certificate on
+each demo device; keep that private CA directory out of source control.
+
 The web container is the production build; for local UI iteration run the dev server instead:
 
 ```bash
@@ -80,13 +85,7 @@ its own service later without rewriting callers.
 
 ## Status
 
-Runnable end-to-end in Docker for standard/crazyhouse single-board games: auth → ticket → WSS → the
-engine validates/applies the move → Postgres persists the ply. Verified against both the real vector64
-binary (`ChessEngine-all`, via the engine bridge) and the python-chess dev engine. Covered by tests
-including a full-stack HTTP+WSS integration test and real process/TCP engine tests (the Postgres JDBC
-test runs when `CHESSOC_TEST_DB_URL` is set).
-
-Not yet the production integration: the vector64 binary (the engine service proxies to it via
-`ENGINE_CMD`; the default dev engine is python-chess), Redis presence/affinity, OAuth/password login
-(dev `/login` stand-in), and bughouse's two-board hand coupling. Remaining phases in
-`doc/BACKEND_ARCHITECTURE.md §16`.
+Runnable end-to-end in Docker for standard, crazyhouse, and coupled two-board bughouse games. Live
+room checkpoints, seats, positions, reserves, clocks, and pending draw state survive server restarts
+when Postgres is configured. The stack has been exercised with both the real vector64 binary
+(`ChessEngine-all`, via the engine bridge) and the in-container python-chess development engine.

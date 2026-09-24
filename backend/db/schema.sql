@@ -9,6 +9,12 @@ CREATE TABLE IF NOT EXISTS match_plies (
     PRIMARY KEY (game_id, version)
 );
 
+CREATE TABLE IF NOT EXISTS live_rooms (
+    room_id    TEXT   PRIMARY KEY,
+    state_json TEXT   NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS accounts (
     id            TEXT   PRIMARY KEY,
     username      TEXT   NOT NULL UNIQUE,

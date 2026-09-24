@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -131,5 +132,51 @@ class BughouseMatchTest {
                     .filteredOn(id -> id.startsWith("engine-"))
                     .hasSize(4 - humans);
         }
+    }
+
+    @Test
+    void claimsConfiguredHumanSeatsExactly() {
+        ValidatorClient engine = passiveEngine();
+        MatchService service = new MatchService(engine, new InMemoryMatchRepository(),
+                new ManualScheduler(), () -> 0L);
+        BughouseMatch match = new BughouseMatch("manual-room", service, Fen.parse(START),
+                TimeControl.fischer(300_000, 0), "creator", Side.WHITE, Set.of("aw", "bb"),
+                (variant, fen) -> Uci.of("e2e4"), (game, result) -> {});
+
+        BughouseMatch.Seat invitee = match.join("friend", "bb");
+
+        assertThat(invitee.board()).isEqualTo("B");
+        assertThat(invitee.color()).isEqualTo("black");
+        assertThat(invitee.team()).isEqualTo("blue");
+        assertThat(invitee.seat()).isEqualTo("bb");
+        assertThat(invitee.humanSeats()).containsExactly("aw", "bb");
+        assertThat(invitee.availableSeats()).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> match.join("intruder", "ab"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("configured for AI");
+    }
+
+    private static ValidatorClient passiveEngine() {
+        return new ValidatorClient() {
+            @Override
+            public ApplyResult apply(Variant variant, Fen start, List<Uci> history, Uci move) {
+                return ApplyResult.legal(start, Terminal.NONE, false, start.sideToMove(), Optional.empty());
+            }
+
+            @Override
+            public List<Uci> legalMoves(Variant variant, Fen start, List<Uci> history) {
+                return List.of(Uci.of("e2e4"));
+            }
+
+            @Override
+            public StatusResult status(Variant variant, Fen position) {
+                return new StatusResult(Terminal.NONE, false, position.sideToMove());
+            }
+
+            @Override
+            public boolean canMate(Variant variant, Fen position, Side side) {
+                return true;
+            }
+        };
     }
 }

@@ -28,13 +28,16 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.InetAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -52,6 +55,7 @@ public final class HttpAuthApi {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.s = services;
         this.friendService = new FriendService(services.friends());
+        route("/internal/tls-allow", this::tlsAllow);
         route("/login", this::guestLogin);
         route("/auth/register", this::register);
         route("/auth/upgrade", this::upgrade);
@@ -94,6 +98,33 @@ public final class HttpAuthApi {
 
     public void stop() {
         server.stop(0);
+    }
+
+    private void tlsAllow(HttpExchange x) throws IOException {
+        String domain = query(x).getOrDefault("domain", "");
+        if (isLocalTlsName(domain)) {
+            send(x, 200, Map.of("allowed", true));
+        } else {
+            send(x, 403, Map.of("allowed", false));
+        }
+    }
+
+    private static boolean isLocalTlsName(String domain) {
+        if ("localhost".equalsIgnoreCase(domain)) {
+            return true;
+        }
+        if (!domain.matches("[0-9.]+") && !domain.matches("[0-9a-fA-F:]+")) {
+            return false;
+        }
+        try {
+            InetAddress address = InetAddress.getByName(domain);
+            byte[] raw = address.getAddress();
+            boolean uniqueLocalV6 = raw.length == 16 && (raw[0] & 0xfe) == 0xfc;
+            return address.isLoopbackAddress() || address.isSiteLocalAddress()
+                    || address.isLinkLocalAddress() || uniqueLocalV6;
+        } catch (IllegalArgumentException | IOException e) {
+            return false;
+        }
     }
 
     // ---- auth ----
@@ -209,12 +240,19 @@ public final class HttpAuthApi {
         if (token == null) {
             return;
         }
-        String room = read(x).path("room").asText();
+        JsonNode body = read(x);
+        String room = body.path("room").asText();
         if (room.isBlank()) {
             send(x, 400, Map.of("error", "room required"));
             return;
         }
-        Lobby.Seat seat = s.lobby().join(room, token.playerId());
+        Lobby.Seat seat;
+        try {
+            seat = s.lobby().join(room, token.playerId(), body.path("seat").asText(null));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            send(x, 409, Map.of("error", e.getMessage()));
+            return;
+        }
         s.presence().enterGame(token.playerId(), seat.gameId());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("roomId", seat.roomId());
@@ -224,10 +262,13 @@ public final class HttpAuthApi {
         payload.put("color", seat.color());
         payload.put("partnerColor", seat.partnerColor());
         payload.put("team", seat.team());
+        payload.put("seat", seat.seat());
         payload.put("seatsFilled", seat.seatsFilled());
         payload.put("humansJoined", seat.humansJoined());
         payload.put("humanTarget", seat.humanTarget());
         payload.put("variant", seat.variant());
+        payload.put("humanSeats", seat.humanSeats());
+        payload.put("availableSeats", seat.availableSeats());
         send(x, 200, payload);
     }
 
@@ -245,7 +286,18 @@ public final class HttpAuthApi {
         if (variant == Variant.BUGHOUSE) {
             Side humanColor = "black".equalsIgnoreCase(b.path("color").asText("white")) ? Side.BLACK : Side.WHITE;
             int humanPlayers = Math.max(1, Math.min(4, b.path("humanPlayers").asInt(4)));
-            gameId = s.lobby().createBughouse(token.playerId(), tc, humanColor, humanPlayers);
+            Set<String> humanSeats = new LinkedHashSet<>();
+            if (b.path("humanSeats").isArray()) {
+                b.path("humanSeats").forEach(node -> humanSeats.add(node.asText()));
+            }
+            try {
+                gameId = humanSeats.isEmpty()
+                        ? s.lobby().createBughouse(token.playerId(), tc, humanColor, humanPlayers)
+                        : s.lobby().createBughouse(token.playerId(), tc, humanColor, humanSeats);
+            } catch (IllegalArgumentException e) {
+                send(x, 400, Map.of("error", e.getMessage()));
+                return;
+            }
         } else if (b.path("vsEngine").asBoolean(false)) {
             Side humanColor = "black".equalsIgnoreCase(b.path("color").asText("white")) ? Side.BLACK : Side.WHITE;
             gameId = s.lobby().createVsEngine(token.playerId(), variant, tc, humanColor);
@@ -670,7 +722,9 @@ public final class HttpAuthApi {
             return null;
         }
         try {
-            return s.tokens().verify(auth.substring(7), s.clock().getAsLong());
+            SessionToken token = s.tokens().verify(auth.substring(7), s.clock().getAsLong());
+            s.sessions().register(token.sessionId(), token.playerId());
+            return token;
         } catch (AuthException e) {
             send(x, 401, Map.of("error", e.getMessage()));
             return null;

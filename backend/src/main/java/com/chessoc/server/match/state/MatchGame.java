@@ -70,6 +70,7 @@ public final class MatchGame {
     private final boolean rated;
     private final TimeControl timeControl;
     private java.util.function.Consumer<GameResult> completionListener;
+    private Runnable stateChangeListener = () -> {};
 
     private Fen currentFen;
     private long version;
@@ -80,6 +81,7 @@ public final class MatchGame {
     private Scheduler.Cancellable flagTimer;
     private boolean startHeld;
     private boolean started;
+    private boolean recoverySuspended;
 
     public MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
                      Scheduler scheduler, LongSupplier clock, Supplier<String> ids) {
@@ -89,6 +91,13 @@ public final class MatchGame {
     MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
               Scheduler scheduler, LongSupplier clock, Supplier<String> ids,
               ReentrantLock lock, boolean startHeld) {
+        this(spec, engine, repository, scheduler, clock, ids, lock, startHeld, null, 0);
+    }
+
+    MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
+              Scheduler scheduler, LongSupplier clock, Supplier<String> ids,
+              ReentrantLock lock, boolean startHeld, LiveRoomState.BoardState recovered,
+              long savedAtEpochMs) {
         this.engine = engine;
         this.repository = repository;
         this.scheduler = scheduler;
@@ -109,7 +118,28 @@ public final class MatchGame {
         clocks.put(Side.BLACK, Clock.start(tc));
         this.turnStartMs = clock.getAsLong();
         this.started = !startHeld && whiteId != null && blackId != null;
-        if (started) {
+        if (recovered != null) {
+            currentFen = Fen.parse(recovered.currentFen());
+            version = recovered.version();
+            moves.addAll(recovered.moves().stream().map(Uci::of).toList());
+            capturedByWhite.addAll(recovered.capturedByWhite());
+            capturedByBlack.addAll(recovered.capturedByBlack());
+            inCheck = recovered.inCheck();
+            pendingDrawOfferBy = recovered.pendingDrawOfferBy();
+            started = recovered.started();
+            recoverySuspended = true;
+            long downtime = started ? Math.max(0, clock.getAsLong() - savedAtEpochMs) : 0;
+            long whiteRemaining = recovered.whiteRemainingMs();
+            long blackRemaining = recovered.blackRemainingMs();
+            if (started && currentFen.sideToMove() == Side.WHITE) {
+                whiteRemaining -= downtime;
+            } else if (started) {
+                blackRemaining -= downtime;
+            }
+            clocks.put(Side.WHITE, new Clock(whiteRemaining, tc));
+            clocks.put(Side.BLACK, new Clock(blackRemaining, tc));
+            this.turnStartMs = clock.getAsLong();
+        } else if (started) {
             rescheduleFlag();
         }
     }
@@ -149,6 +179,40 @@ public final class MatchGame {
 
     public void onCapture(java.util.function.BiConsumer<Side, PieceType> listener) {
         this.captureListener = listener;
+    }
+
+    public void onStateChange(Runnable listener) {
+        this.stateChangeListener = listener == null ? () -> {} : listener;
+    }
+
+    public LiveRoomState.BoardState recoveryState() {
+        lock.lock();
+        try {
+            GameSnapshot snapshot = snapshot();
+            return new LiveRoomState.BoardState(gameId, initialFen.raw(), currentFen.raw(),
+                    whiteId, blackId, version, moves.stream().map(Uci::value).toList(),
+                    snapshot.clockSample().whiteRemainingMs(), snapshot.clockSample().blackRemainingMs(),
+                    started, inCheck, pendingDrawOfferBy, List.copyOf(capturedByWhite),
+                    List.copyOf(capturedByBlack));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void resumeRecovered() {
+        lock.lock();
+        try {
+            if (!recoverySuspended) {
+                return;
+            }
+            recoverySuspended = false;
+            if (started && result == null) {
+                rescheduleFlag();
+                maybeScheduleAi();
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     /** Creates the rematch game (colours swapped) once both players accept. */
@@ -208,11 +272,13 @@ public final class MatchGame {
             if (whiteId == null) {
                 whiteId = playerId;
                 startIfReady();
+                stateChanged();
                 return "white";
             }
             if (blackId == null) {
                 blackId = playerId;
                 startIfReady();
+                stateChanged();
                 return "black";
             }
             return playerId.equals(blackId) ? "black" : "spectator";
@@ -237,6 +303,7 @@ public final class MatchGame {
             if (!started) {
                 broadcastAll();
             }
+            stateChanged();
         } finally {
             lock.unlock();
         }
@@ -247,6 +314,7 @@ public final class MatchGame {
         try {
             startHeld = false;
             startIfReady();
+            stateChanged();
         } finally {
             lock.unlock();
         }
@@ -264,6 +332,7 @@ public final class MatchGame {
             version++;
             reissueAllCaps();
             broadcastAll();
+            stateChanged();
         } finally {
             lock.unlock();
         }
@@ -437,11 +506,12 @@ public final class MatchGame {
             rescheduleFlag();
         }
         reissueAllCaps();
+        stateChanged();
         maybeScheduleAi();
     }
 
     private void maybeScheduleAi() {
-        if (started && result == null && aiMovers.containsKey(sideToMove())) {
+        if (!recoverySuspended && started && result == null && aiMovers.containsKey(sideToMove())) {
             scheduler.schedule(this::playAi, AI_MOVE_DELAY_MS);
         }
     }
@@ -502,6 +572,7 @@ public final class MatchGame {
         pendingDrawOfferBy = session.playerId();
         reissueAllCaps();
         broadcastExcept(session.playerId());
+        stateChanged();
         return accepted(intent, session.playerId());
     }
 
@@ -516,6 +587,7 @@ public final class MatchGame {
         }
         reissueAllCaps();
         broadcastExcept(session.playerId());
+        stateChanged();
         return accepted(intent, session.playerId());
     }
 
@@ -549,6 +621,7 @@ public final class MatchGame {
                 e.printStackTrace();
             }
         }
+        stateChanged();
     }
 
     private void reissueAllCaps() {
@@ -693,6 +766,7 @@ public final class MatchGame {
             endByTimeout(side);
             reissueAllCaps();
             broadcastAll();
+            stateChanged();
         } finally {
             lock.unlock();
         }
@@ -735,6 +809,10 @@ public final class MatchGame {
     private String opponentOf(String playerId) {
         String opponent = playerId.equals(whiteId) ? blackId : whiteId;
         return opponent == null ? "" : opponent;
+    }
+
+    private void stateChanged() {
+        stateChangeListener.run();
     }
 
     private void startIfReady() {

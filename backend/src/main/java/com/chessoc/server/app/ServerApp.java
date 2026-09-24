@@ -11,10 +11,13 @@ import com.chessoc.server.games.InMemoryGamesRepository;
 import com.chessoc.server.games.PostgresGamesRepository;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.InMemoryMatchRepository;
+import com.chessoc.server.match.state.InMemoryLiveRoomRepository;
+import com.chessoc.server.match.state.LiveRoomRepository;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchRepository;
 import com.chessoc.server.match.state.MatchService;
 import com.chessoc.server.match.state.PostgresMatchRepository;
+import com.chessoc.server.match.state.PostgresLiveRoomRepository;
 import com.chessoc.server.match.state.Scheduler;
 import com.chessoc.server.match.state.SystemScheduler;
 import com.chessoc.server.matchmaking.MatchmakingService;
@@ -63,6 +66,9 @@ public final class ServerApp {
         MatchRepository matchRepo = useDb
                 ? new PostgresMatchRepository(db)
                 : new InMemoryMatchRepository();
+        LiveRoomRepository liveRooms = useDb
+                ? new PostgresLiveRoomRepository(db)
+                : new InMemoryLiveRoomRepository();
         AccountRepository accounts = useDb ? new PostgresAccountRepository(db) : new InMemoryAccountRepository();
         RatingRepository ratings = useDb ? new PostgresRatingRepository(db) : new InMemoryRatingRepository();
         FriendRepository friends = useDb ? new PostgresFriendRepository(db) : new InMemoryFriendRepository();
@@ -73,7 +79,8 @@ public final class ServerApp {
         LeaderboardService leaderboard = new LeaderboardService(ratings, accounts);
         AccountService accountService = new AccountService(accounts);
         Presence presence = new Presence(clock);
-        Lobby lobby = new Lobby(matches, ratingService, games, engine, TimeControl.fischer(600_000, 5_000), clock);
+        Lobby lobby = new Lobby(matches, ratingService, games, engine,
+                TimeControl.fischer(600_000, 5_000), clock, liveRooms);
         SeekCoordinator seeks = new SeekCoordinator(new MatchmakingService(), lobby::createPaired);
 
         TokenService tokens = new TokenService(config.tokenSecret());

@@ -2,6 +2,7 @@
 .gradle/
 build/
 engine/bin/
+caddy-data/
 
 # IDE
 .idea/

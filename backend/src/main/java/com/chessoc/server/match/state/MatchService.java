@@ -44,6 +44,21 @@ public final class MatchService {
         return game;
     }
 
+    MatchGame restore(GameSpec spec, LiveRoomState.BoardState state, long savedAtEpochMs) {
+        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
+                new ReentrantLock(), false, state, savedAtEpochMs);
+        games.put(spec.gameId(), game);
+        return game;
+    }
+
+    MatchGame restoreHeld(GameSpec spec, ReentrantLock matchLock,
+                          LiveRoomState.BoardState state, long savedAtEpochMs) {
+        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
+                matchLock, true, state, savedAtEpochMs);
+        games.put(spec.gameId(), game);
+        return game;
+    }
+
     public Optional<MatchGame> get(String gameId) {
         return Optional.ofNullable(games.get(gameId));
     }
