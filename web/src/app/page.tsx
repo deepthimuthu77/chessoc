@@ -176,8 +176,11 @@ export default function HomePage() {
                   onClick={() => router.push(`/room/${g.gameId}`)}
                   className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left transition-colors hover:border-zinc-700"
                 >
-                  <span className="text-zinc-200">
-                    vs {g.opponent} <span className="text-xs text-zinc-500">({g.color})</span>
+                  <span className="flex min-w-0 flex-col gap-0.5 text-zinc-200">
+                    <span className="truncate">vs {g.opponent}</span>
+                    <span className="text-xs capitalize text-zinc-500">
+                      {g.variant} · {g.minutes}+{g.increment} · {g.color}
+                    </span>
                   </span>
                   <span className="text-sm font-bold text-blue-400">Resume</span>
                 </button>

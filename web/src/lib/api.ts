@@ -130,6 +130,9 @@ export interface ActiveGame {
   gameId: string;
   color: string;
   opponent: string;
+  variant: 'standard' | 'crazyhouse' | 'bughouse';
+  minutes: number;
+  increment: number;
 }
 
 export interface Ply {
