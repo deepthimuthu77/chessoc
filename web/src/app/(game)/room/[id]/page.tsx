@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Board } from '@/components/ui/Board';
 import { CapturedPieces } from '@/components/ui/CapturedPieces';
 import { Chat } from '@/components/ui/Chat';
@@ -16,7 +16,8 @@ import { useGame } from '@/hooks/use-game';
 export default function RoomPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const game = useGame(params.id);
+  const searchParams = useSearchParams();
+  const game = useGame(params.id, searchParams.get('seat'));
   const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
 
   // both players accepted a rematch — the server created the new game
@@ -50,7 +51,7 @@ export default function RoomPage() {
     <main className="flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 md:p-8">
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
-        <div className="flex w-full max-w-md flex-col space-y-6 xl:w-80">
+        <div className="order-2 flex w-full max-w-md flex-col space-y-6 xl:order-1 xl:w-80">
           <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} captured={game.opponent.captured} score={game.opponent.score} />
           {game.isDropVariant && <Hand pieces={game.oppHand} />}
           <MoveHistory history={game.history} />
@@ -77,7 +78,7 @@ export default function RoomPage() {
           {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} />}
         </div>
 
-        <div className="relative flex w-full max-w-2xl flex-col items-center">
+        <div className="order-1 relative flex w-full max-w-2xl flex-col items-center xl:order-2">
           <Board
             pieces={game.pieces}
             legalMoves={game.legalMoves}
@@ -97,9 +98,11 @@ export default function RoomPage() {
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
               <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-8 py-6 text-center shadow-2xl">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Game unavailable</p>
-                <h1 className="mt-2 text-2xl font-bold text-white">Waiting for the server transport</h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">
+                  {game.error ? 'Unable to join this game' : 'Waiting for the server transport'}
+                </h1>
                 <p className="mt-2 max-w-sm text-sm text-zinc-400">
-                  The board remains read-only until an authenticated server projection and capabilities arrive.
+                  {game.error ?? 'The board remains read-only until an authenticated server projection arrives.'}
                 </p>
               </div>
             </div>
@@ -150,13 +153,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
             Board {game.board} · {game.humansJoined}/{game.humanTarget} human seats
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigator.clipboard.writeText(window.location.href)}
-          className="rounded border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-900"
-        >
-          Copy room link
-        </button>
+        <InviteLinks roomId={game.roomId} availableSeats={game.availableSeats} />
       </header>
 
       <div className="mx-auto grid max-w-[1680px] gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.88fr)_18rem]">
@@ -233,6 +230,46 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
         onCancel={game.cancelPromotion}
       />
     </main>
+  );
+}
+
+const SEAT_LABELS: Record<string, string> = {
+  aw: 'Board A White',
+  ab: 'Board A Black',
+  bw: 'Board B White',
+  bb: 'Board B Black',
+};
+
+function InviteLinks({ roomId, availableSeats }: { roomId: string; availableSeats: string[] }) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copySeat(seat?: string) {
+    const suffix = seat ? `?seat=${seat}` : '';
+    await navigator.clipboard.writeText(`${window.location.origin}/room/${roomId}${suffix}`);
+    setCopied(seat ?? 'room');
+    window.setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      {availableSeats.map((seat) => (
+        <button
+          key={seat}
+          type="button"
+          onClick={() => copySeat(seat)}
+          className="border border-blue-500/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10"
+        >
+          {copied === seat ? 'Copied' : `Invite ${SEAT_LABELS[seat] ?? seat}`}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => copySeat()}
+        className="border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900"
+      >
+        {copied === 'room' ? 'Copied' : availableSeats.length > 0 ? 'Copy open-seat link' : 'Copy room link'}
+      </button>
+    </div>
   );
 }
 

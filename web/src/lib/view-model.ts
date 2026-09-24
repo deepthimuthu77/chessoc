@@ -141,7 +141,8 @@ const REASON_KIND: Record<string, ModalKind> = {
 };
 
 export function toModalResult(result: GameResult): { kind: ModalKind; winner?: Color } {
-  const kind = REASON_KIND[result.reason]
+  const reason = result.reason.startsWith('partner_') ? result.reason.slice('partner_'.length) : result.reason;
+  const kind = REASON_KIND[reason]
     ?? (result.type === 'ABORTED' ? 'aborted' : result.type === 'DRAW' ? 'draw_agreed' : 'checkmate');
   return { kind, winner: result.winner ?? undefined };
 }

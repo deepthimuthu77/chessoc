@@ -37,10 +37,11 @@ export interface PromotionPrompt {
   to: string;
 }
 
-export function useGame(room: string) {
+export function useGame(room: string, preferredSeat?: string | null) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [partnerState, partnerDispatch] = useReducer(reducer, initialState);
   const [seat, setSeat] = useState<JoinResult | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [color, setColor] = useState<Color | 'spectator' | null>(null);
   const [promotion, setPromotion] = useState<PromotionPrompt | null>(null);
   const [premove, setPremoveState] = useState<{ from: string; to: string } | null>(null);
@@ -68,8 +69,9 @@ export function useGame(room: string) {
 
     (async () => {
       try {
+        setJoinError(null);
         const token = getAuth()?.token ?? (await api.guest()).token;
-        const seat = await api.join(room, token);
+        const seat = await api.join(room, token, preferredSeat ?? undefined);
         if (cancelled) return;
         setSeat(seat);
         setColor(seat.color);
@@ -111,8 +113,11 @@ export function useGame(room: string) {
           });
           partnerTransport.start();
         }
-      } catch {
-        if (!cancelled) dispatch({ type: 'status', status: 'closed' });
+      } catch (error) {
+        if (!cancelled) {
+          setJoinError(error instanceof Error ? error.message : 'Unable to join this room');
+          dispatch({ type: 'status', status: 'closed' });
+        }
       }
     })();
 
@@ -121,7 +126,7 @@ export function useGame(room: string) {
       transport?.close();
       partnerTransport?.close();
     };
-  }, [room]);
+  }, [room, preferredSeat]);
 
   // drive the clock display between server samples
   useEffect(() => {
@@ -234,8 +239,16 @@ export function useGame(room: string) {
   }, [snapshot, pieces]);
   const orientation: 'white' | 'black' = getSettings().autoFlip && myColor === 'black' ? 'black' : 'white';
 
+  const isBughouse = seat?.variant === 'bughouse';
+  const isCrazyhouse = seat?.variant === 'crazyhouse';
+  const seatsFilled = isBughouse
+    ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
+        partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId].filter(Boolean).length
+    : seat?.seatsFilled ?? 0;
+  const clocksRunning = !isBughouse || seatsFilled === 4;
+
   const clocks = snapshot
-    ? displayClocks(snapshot.clockSample, receivedAt, !snapshot.result)
+    ? displayClocks(snapshot.clockSample, receivedAt, !snapshot.result && clocksRunning)
     : { white: '--:--', black: '--:--' };
   const other: Color = myColor === 'black' ? 'white' : 'black';
 
@@ -245,8 +258,6 @@ export function useGame(room: string) {
   const youMaterial = materialScore(youCaptured);
   const oppMaterial = materialScore(oppCaptured);
 
-  const isBughouse = seat?.variant === 'bughouse';
-  const isCrazyhouse = seat?.variant === 'crazyhouse';
   const isDropVariant = isCrazyhouse || isBughouse;
   const yourHand = snapshot && myColor ? parseHand(snapshot.fen, myColor) : [];
   const oppHand = snapshot && myColor ? parseHand(snapshot.fen, other) : [];
@@ -258,7 +269,7 @@ export function useGame(room: string) {
   const partnerOther: Color = partnerColor === 'black' ? 'white' : 'black';
   const partnerPieces = partnerSnapshot ? fenToPieces(partnerSnapshot.fen) : [];
   const partnerClocks = partnerSnapshot
-    ? displayClocks(partnerSnapshot.clockSample, partnerReceivedAt, !partnerSnapshot.result)
+    ? displayClocks(partnerSnapshot.clockSample, partnerReceivedAt, !partnerSnapshot.result && clocksRunning)
     : { white: '--:--', black: '--:--' };
   const partnerOrientation: Color = getSettings().autoFlip && partnerColor === 'black' ? 'black' : 'white';
   const partnerHand = partnerSnapshot && partnerColor ? parseHand(partnerSnapshot.fen, partnerColor) : [];
@@ -267,15 +278,22 @@ export function useGame(room: string) {
   const partnerCheckSquare = partnerSnapshot?.inCheck
     ? partnerPieces.find((p) => p.char === (partnerSnapshot.sideToMove === 'white' ? 'K' : 'k'))?.square ?? null
     : null;
-  const seatsFilled = isBughouse
-    ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
-        partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId].filter(Boolean).length
-    : seat?.seatsFilled ?? 0;
   const humansJoined = isBughouse
     ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
         partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId]
         .filter((id) => id && !id.startsWith('engine')).length
     : seat?.humansJoined ?? 0;
+  const boardA = seat?.board === 'B' ? partnerSnapshot : snapshot;
+  const boardB = seat?.board === 'B' ? snapshot : partnerSnapshot;
+  const occupiedBughouseSeats = new Set([
+    ...(boardA?.whitePlayerId ? ['aw'] : []),
+    ...(boardA?.blackPlayerId ? ['ab'] : []),
+    ...(boardB?.whitePlayerId ? ['bw'] : []),
+    ...(boardB?.blackPlayerId ? ['bb'] : []),
+  ]);
+  const availableSeats = seat?.humanSeats.filter((code) => !occupiedBughouseSeats.has(code))
+    ?? seat?.availableSeats
+    ?? [];
   const chat = useMemo(
     () => isBughouse
       ? [...state.chat, ...partnerState.chat].sort((a, b) => a.serverTimestamp - b.serverTimestamp)
@@ -312,7 +330,7 @@ export function useGame(room: string) {
     color: myColor,
     isSpectator: color === 'spectator',
     isVsEngine,
-    error: state.error,
+    error: joinError ?? state.error,
     pieces,
     legalMoves,
     lastMove,
@@ -346,6 +364,9 @@ export function useGame(room: string) {
     seatsFilled,
     humansJoined,
     humanTarget: seat?.humanTarget ?? (isBughouse ? 4 : 2),
+    seat: seat?.seat ?? '',
+    humanSeats: seat?.humanSeats ?? [],
+    availableSeats,
     yourHand,
     oppHand,
     dropTargets,

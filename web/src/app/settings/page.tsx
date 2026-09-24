@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
@@ -18,7 +19,7 @@ const TOGGLES: { key: keyof Settings; label: string; help: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const { account, token, ready, logout } = useAuth(true);
+  const { account, token, ready, isGuest, logout } = useAuth(true);
   const [settings, setLocal] = useState<Settings | null>(null);
   const [oldPw, setOldPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -92,6 +93,14 @@ export default function SettingsPage() {
         </div>
 
         <h2 className="mb-3 mt-10 text-xs font-bold uppercase tracking-wider text-zinc-500">Account</h2>
+        {isGuest ? (
+          <div className="border border-blue-500/30 bg-blue-500/10 p-6">
+            <p className="text-sm text-zinc-300">Create an account to keep your games and manage a password.</p>
+            <Link href="/upgrade" className="mt-4 inline-block bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-500">
+              Create account
+            </Link>
+          </div>
+        ) : <>
         <form onSubmit={changePassword} className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <input
             type="password"
@@ -127,6 +136,7 @@ export default function SettingsPage() {
           </button>
           {delMsg && <p className="text-sm text-rose-400">{delMsg}</p>}
         </form>
+        </>}
       </div>
     </main>
   );

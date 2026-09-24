@@ -17,6 +17,18 @@ const TIME_CONTROLS = [
 
 const VARIANTS = ['standard', 'crazyhouse', 'bughouse'];
 
+const BUGHOUSE_SEATS = [
+  { code: 'aw', board: 'A', color: 'White', team: 'Blue' },
+  { code: 'ab', board: 'A', color: 'Black', team: 'Red' },
+  { code: 'bw', board: 'B', color: 'White', team: 'Red' },
+  { code: 'bb', board: 'B', color: 'Black', team: 'Blue' },
+] as const;
+
+function defaultBughouseSeats(color: 'white' | 'black', count: number) {
+  const order = color === 'white' ? ['aw', 'bb', 'ab', 'bw'] : ['ab', 'bw', 'aw', 'bb'];
+  return order.slice(0, count);
+}
+
 export default function HomePage() {
   const { account, token, ready, isGuest, logout } = useAuth(true);
   const router = useRouter();
@@ -25,8 +37,10 @@ export default function HomePage() {
   const [rated, setRated] = useState(true);
   const [color, setColor] = useState<'white' | 'black'>('white');
   const [bughouseHumans, setBughouseHumans] = useState(1);
+  const [bughouseSeats, setBughouseSeats] = useState<string[]>(['aw']);
   const [room, setRoom] = useState('');
   const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [active, setActive] = useState<ActiveGame[]>([]);
   const [open, setOpen] = useState<OpenGame[]>([]);
   const [searching, setSearching] = useState(false);
@@ -70,16 +84,19 @@ export default function HomePage() {
     color?: 'white' | 'black';
     rated?: boolean;
     humanPlayers?: number;
+    humanSeats?: string[];
   }) {
     setBusy(true);
+    setCreateError(null);
     try {
       const { gameId } = await api.createGame(
         { variant, minutes: tc.minutes, increment: tc.increment, ...extra },
         token!,
       );
       router.push(`/room/${gameId}`);
-    } catch {
+    } catch (error) {
       setBusy(false);
+      setCreateError(error instanceof Error ? error.message : 'Unable to create the game');
     }
   }
 
@@ -105,6 +122,25 @@ export default function HomePage() {
     }
   }
 
+  function chooseBughouseCount(count: number) {
+    setBughouseHumans(count);
+    setBughouseSeats(defaultBughouseSeats(color, count));
+  }
+
+  function chooseBughouseColor(next: 'white' | 'black') {
+    setColor(next);
+    setBughouseSeats(defaultBughouseSeats(next, bughouseHumans));
+  }
+
+  function toggleBughouseSeat(code: string) {
+    const creatorSeat = color === 'white' ? 'aw' : 'ab';
+    if (code === creatorSeat) return;
+    setBughouseSeats((selected) => {
+      if (selected.includes(code)) return selected.filter((seat) => seat !== code);
+      return selected.length < bughouseHumans ? [...selected, code] : selected;
+    });
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
@@ -120,7 +156,7 @@ export default function HomePage() {
         {isGuest && (
           <Link
             href="/upgrade"
-            className="flex items-center justify-between rounded-2xl border border-blue-500/30 bg-blue-500/10 px-6 py-4 transition-colors hover:bg-blue-500/15"
+            className="flex flex-col items-start gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-6 py-4 transition-colors hover:bg-blue-500/15 sm:flex-row sm:items-center sm:justify-between"
           >
             <span className="text-sm text-zinc-200">
               You&apos;re playing as a guest. Create an account to save your games and ratings.
@@ -170,14 +206,14 @@ export default function HomePage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="mr-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Variant</span>
+          <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:gap-2">
+            <span className="col-span-3 mb-1 text-xs font-bold uppercase tracking-wider text-zinc-500 sm:mb-0 sm:mr-2">Variant</span>
             {VARIANTS.map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => chooseVariant(v)}
-                className={`rounded-xl px-4 py-2 text-sm font-bold capitalize transition-colors ${
+                className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold capitalize transition-colors sm:px-4 ${
                   variant === v ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -228,7 +264,7 @@ export default function HomePage() {
                     <button
                       key={count}
                       type="button"
-                      onClick={() => setBughouseHumans(count)}
+                      onClick={() => chooseBughouseCount(count)}
                       className={`border px-3 py-2 text-sm font-bold ${
                         bughouseHumans === count
                           ? 'border-blue-500 bg-blue-500/10 text-blue-300'
@@ -247,7 +283,7 @@ export default function HomePage() {
                     <button
                       key={choice}
                       type="button"
-                      onClick={() => setColor(choice)}
+                      onClick={() => chooseBughouseColor(choice)}
                       className={`border px-4 py-2 text-sm font-bold capitalize ${
                         color === choice
                           ? 'border-blue-500 bg-blue-500/10 text-blue-300'
@@ -260,24 +296,75 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+            <div className="mt-7 border-t border-zinc-800 pt-6">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Human seats</span>
+                <span className={`text-xs font-semibold ${
+                  bughouseSeats.length === bughouseHumans ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  {bughouseSeats.length}/{bughouseHumans} selected
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(['A', 'B'] as const).map((board) => (
+                  <div key={board} className="border border-zinc-800 p-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Board {board}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {BUGHOUSE_SEATS.filter((seat) => seat.board === board).map((seat) => {
+                        const selected = bughouseSeats.includes(seat.code);
+                        const creator = seat.code === (color === 'white' ? 'aw' : 'ab');
+                        return (
+                          <button
+                            key={seat.code}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleBughouseSeat(seat.code)}
+                            className={`min-w-0 border px-3 py-3 text-left transition-colors ${
+                              selected
+                                ? 'border-blue-500 bg-blue-500/10 text-white'
+                                : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                            }`}
+                          >
+                            <span className="block text-sm font-bold">{seat.color}</span>
+                            <span className={`mt-1 block text-xs ${seat.team === 'Blue' ? 'text-blue-400' : 'text-rose-400'}`}>
+                              {seat.team} team{creator ? ' · You' : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-zinc-500">Unselected seats are controlled by the engine.</p>
+            </div>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || bughouseSeats.length !== bughouseHumans}
               onClick={() => create({
                 vsEngine: bughouseHumans < 4,
                 rated: false,
                 color,
                 humanPlayers: bughouseHumans,
+                humanSeats: bughouseSeats,
               })}
               className="mt-7 w-full bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-500 disabled:opacity-60"
             >
-              {bughouseHumans === 1
-                ? 'Play with three bots'
-                : bughouseHumans === 4
-                  ? 'Create four-player room'
-                  : `Create ${bughouseHumans}H + ${4 - bughouseHumans}AI room`}
+              {busy
+                ? 'Creating room...'
+                : bughouseHumans === 1
+                  ? 'Play with three bots'
+                  : bughouseHumans === 4
+                    ? 'Create four-player room'
+                    : `Create ${bughouseHumans}H + ${4 - bughouseHumans}AI room`}
             </button>
           </section>
+        )}
+
+        {createError && (
+          <p role="alert" className="border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            {createError}
+          </p>
         )}
 
         {variant !== 'bughouse' && <div className="grid gap-6 md:grid-cols-2">
@@ -308,7 +395,7 @@ export default function HomePage() {
               onClick={() => create({ vsEngine: true, color })}
               className="mt-auto rounded-xl bg-gradient-to-b from-[#5c8aab] to-[#4b7399] px-6 py-3 font-bold text-white shadow-[0_0_20px_rgba(75,115,153,0.4)] transition-all hover:from-[#6a9bc2] hover:to-[#5785b0] disabled:opacity-60"
             >
-              Play
+              {busy ? 'Creating game...' : 'Play'}
             </button>
           </section>
 
@@ -337,7 +424,7 @@ export default function HomePage() {
               onClick={() => create({ vsEngine: false, rated: variant === 'bughouse' ? false : rated })}
               className="mt-auto rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-100 transition-colors hover:bg-zinc-800 disabled:opacity-60"
             >
-              {variant === 'bughouse' ? 'Create bughouse room' : 'Create game'}
+              {busy ? 'Creating game...' : variant === 'bughouse' ? 'Create bughouse room' : 'Create game'}
             </button>
           </section>
         </div>}

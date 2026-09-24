@@ -37,10 +37,13 @@ export interface JoinResult {
   color: 'white' | 'black' | 'spectator';
   partnerColor: 'white' | 'black' | 'spectator';
   team: 'blue' | 'red' | 'spectator' | '';
+  seat: 'aw' | 'ab' | 'bw' | 'bb' | 'spectator' | 'white' | 'black';
   seatsFilled: number;
   humansJoined: number;
   humanTarget: number;
   variant: 'standard' | 'crazyhouse' | 'bughouse';
+  humanSeats: string[];
+  availableSeats: string[];
 }
 
 export interface Friend {
@@ -150,6 +153,7 @@ export interface CreateOptions {
   vsEngine?: boolean;
   color?: 'white' | 'black';
   humanPlayers?: number;
+  humanSeats?: string[];
 }
 
 export interface SeekOptions {
@@ -174,7 +178,8 @@ export const api = {
   me: (token: string) => request<{ account: Account }>('/me', 'GET', undefined, token),
   heartbeat: (token: string) => request<{ ok: boolean }>('/heartbeat', 'POST', {}, token),
 
-  join: (room: string, token: string) => request<JoinResult>('/join', 'POST', { room }, token),
+  join: (room: string, token: string, seat?: string) =>
+    request<JoinResult>('/join', 'POST', { room, ...(seat ? { seat } : {}) }, token),
   ticket: (token: string) => request<{ ticket: string }>('/ticket', 'POST', {}, token),
   createGame: (opts: CreateOptions, token: string) =>
     request<{ gameId: string }>('/play/create', 'POST', opts, token),
