@@ -128,14 +128,8 @@ public final class MatchGame {
             pendingDrawOfferBy = recovered.pendingDrawOfferBy();
             started = recovered.started();
             recoverySuspended = true;
-            long downtime = started ? Math.max(0, clock.getAsLong() - savedAtEpochMs) : 0;
             long whiteRemaining = recovered.whiteRemainingMs();
             long blackRemaining = recovered.blackRemainingMs();
-            if (started && currentFen.sideToMove() == Side.WHITE) {
-                whiteRemaining -= downtime;
-            } else if (started) {
-                blackRemaining -= downtime;
-            }
             clocks.put(Side.WHITE, new Clock(whiteRemaining, tc));
             clocks.put(Side.BLACK, new Clock(blackRemaining, tc));
             this.turnStartMs = clock.getAsLong();

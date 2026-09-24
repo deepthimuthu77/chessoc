@@ -549,6 +549,10 @@ public final class HttpAuthApi {
             row.put("gameId", g.gameId());
             row.put("color", me.equals(g.whiteId()) ? "white" : "black");
             row.put("opponent", opponent);
+            row.put("variant", s.lobby().isBughouseGame(g.gameId())
+                    ? "bughouse" : g.variant().name().toLowerCase());
+            row.put("minutes", (int) (g.timeControl().baseMs() / 60_000));
+            row.put("increment", (int) (g.timeControl().incrementMs() / 1_000));
             out.add(row);
         }
         send(x, 200, Map.of("games", out));

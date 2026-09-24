@@ -94,13 +94,7 @@ public final class Lobby {
         }
         String gameId = gameByRoom.get(room);
         if (gameId == null) {
-            gameId = spawn(UUID.randomUUID().toString(), playerId, Variant.STANDARD,
-                    casualTimeControl, false);
-            gameByRoom.put(room, gameId);
-            MatchGame game = matches.get(gameId).orElseThrow();
-            wireStandard(room, game);
-            persistStandard(room, game);
-            return standardSeat(room, gameId, "white");
+            throw new IllegalArgumentException("room not found");
         }
         MatchGame game = matches.get(gameId).orElseThrow();
         Seat seat = standardSeat(room, gameId, game.seatFor(playerId));
@@ -265,6 +259,10 @@ public final class Lobby {
     public boolean isPrimaryBughouseBoard(String gameId) {
         BughouseMatch match = bughouseByRoom.get(gameId);
         return match != null && match.boardA().gameId().equals(gameId);
+    }
+
+    public boolean isBughouseGame(String gameId) {
+        return bughouseByRoom.containsKey(gameId);
     }
 
     public int bughouseSeatsFilled(String gameId) {

@@ -96,13 +96,13 @@ class HttpAuthApiTest {
                 "{\"username\":\"bob\",\"email\":\"bob@x.com\",\"password\":\"secret1\"}", null)
                 .path("token").asText();
 
-        JsonNode a = post("/join", "{\"room\":\"r1\"}", aliceToken);
-        JsonNode b = post("/join", "{\"room\":\"r1\"}", bobToken);
+        String room = post("/play/create", "{\"minutes\":5}", aliceToken)
+                .path("gameId").asText();
+        JsonNode a = post("/join", "{\"room\":\"" + room + "\"}", aliceToken);
+        JsonNode b = post("/join", "{\"room\":\"" + room + "\"}", bobToken);
         assertThat(a.path("color").asText()).isEqualTo("white");
         assertThat(b.path("color").asText()).isEqualTo("black");
         assertThat(b.path("gameId").asText()).isEqualTo(a.path("gameId").asText());
-
-        assertThat(post("/play/create", "{\"minutes\":5}", aliceToken).path("gameId").asText()).isNotBlank();
     }
 
     @Test

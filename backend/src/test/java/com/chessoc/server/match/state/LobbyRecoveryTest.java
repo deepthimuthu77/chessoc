@@ -1,6 +1,7 @@
 package com.chessoc.server.match.state;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.chessoc.server.capability.Capability;
 import com.chessoc.server.capability.CapabilityKind;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 
 class LobbyRecoveryTest {
@@ -50,7 +52,7 @@ class LobbyRecoveryTest {
 
         MatchService restoredMatches = new MatchService(engine, new InMemoryMatchRepository(),
                 new ManualScheduler(), () -> 1_000L, () -> "restored-" + ids.incrementAndGet());
-        Lobby restored = lobby(restoredMatches, liveRooms);
+        Lobby restored = lobby(restoredMatches, liveRooms, () -> 3_601_000L);
         Lobby.Seat restoredSeat = restored.join(room, "alice");
         MatchGame restoredGame = restoredMatches.get(restoredSeat.gameId()).orElseThrow();
 
@@ -58,13 +60,32 @@ class LobbyRecoveryTest {
         assertThat(restoredGame.currentSnapshot().version()).isEqualTo(1);
         assertThat(restoredGame.currentSnapshot().fen().raw()).isEqualTo(AFTER_E4);
         assertThat(restoredGame.currentSnapshot().blackPlayerId()).isEqualTo("bob");
+        assertThat(restoredGame.currentSnapshot().clockSample().blackRemainingMs())
+                .isEqualTo(300_000L);
+    }
+
+    @Test
+    void rejectsUnknownRoomWithoutCreatingAReplacementGame() {
+        ScriptedEngine engine = new ScriptedEngine();
+        MatchService matches = new MatchService(engine, new InMemoryMatchRepository(),
+                new ManualScheduler(), () -> 1_000L, () -> "unexpected-game");
+        Lobby lobby = lobby(matches, new InMemoryLiveRoomRepository());
+
+        assertThatThrownBy(() -> lobby.join("expired-room", "alice"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("room not found");
+        assertThat(matches.get("unexpected-game")).isEmpty();
     }
 
     private static Lobby lobby(MatchService matches, LiveRoomRepository rooms) {
+        return lobby(matches, rooms, () -> 1_000L);
+    }
+
+    private static Lobby lobby(MatchService matches, LiveRoomRepository rooms, LongSupplier clock) {
         return new Lobby(matches, new RatingService(new InMemoryRatingRepository()),
                 new InMemoryGamesRepository(), (variant, fen, budget) -> new SearchResult(
                         Uci.of("e2e4"), new Score.Cp(0), List.of(), 1, Optional.empty()),
                 TimeControl.fischer(300_000, 0),
-                () -> 1_000L, rooms);
+                clock, rooms);
     }
 }
