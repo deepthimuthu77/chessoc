@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { api, type ActiveGame, type OpenGame } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { prefersReducedMotion } from '@/lib/settings';
 
 const TIME_CONTROLS = [
   { label: '1+0', minutes: 1, increment: 0, tag: 'Bullet' },
@@ -44,22 +45,35 @@ export default function HomePage() {
   const [active, setActive] = useState<ActiveGame[]>([]);
   const [open, setOpen] = useState<OpenGame[]>([]);
   const [searching, setSearching] = useState(false);
+  const [aiLevel, setAiLevel] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [customMinutes, setCustomMinutes] = useState('5');
+  const [customIncrement, setCustomIncrement] = useState('0');
+  const [listError, setListError] = useState<string | null>(null);
+  const [listRetry, setListRetry] = useState(0);
 
   useEffect(() => {
     if (token) {
-      api.gamesActive(token).then((r) => setActive(r.games)).catch(() => setActive([]));
+      api.gamesActive(token).then((r) => setActive(r.games)).catch((error) => setListError(error.message));
     }
-  }, [token]);
+  }, [token, listRetry]);
 
   useEffect(() => {
     if (!token) {
       return;
     }
-    const load = () => api.gamesOpen(token).then((r) => setOpen(r.games)).catch(() => setOpen([]));
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const result = await api.gamesOpen(token);
+        if (!stopped) { setOpen(result.games); setListError(null); }
+      } catch (error) {
+        if (!stopped) setListError(error instanceof Error ? error.message : 'Rooms unavailable');
+      } finally { if (!stopped) timer = setTimeout(load, 5000); }
+    };
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, [token]);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [token, listRetry]);
 
   useEffect(() => {
     if (!searching || !token) {
@@ -90,7 +104,7 @@ export default function HomePage() {
     setCreateError(null);
     try {
       const { gameId } = await api.createGame(
-        { variant, minutes: tc.minutes, increment: tc.increment, ...extra },
+        { variant, minutes: tc.minutes, increment: tc.increment, aiLevel, ...extra },
         token!,
       );
       router.push(`/room/${gameId}`);
@@ -101,8 +115,9 @@ export default function HomePage() {
   }
 
   async function quickMatch() {
+    setCreateError(null);
     setSearching(true);
-    const r = await api.seek({ variant, minutes: tc.minutes, increment: tc.increment }, token!).catch(() => null);
+    const r = await api.seek({ variant, minutes: tc.minutes, increment: tc.increment }, token!).catch((error) => { setCreateError(error.message); return null; });
     if (r?.status === 'matched' && r.gameId) {
       router.push(`/room/${r.gameId}`);
     } else if (!r) {
@@ -112,7 +127,7 @@ export default function HomePage() {
 
   async function cancelSearch() {
     setSearching(false);
-    await api.seekCancel(token!).catch(() => {});
+    await api.seekCancel(token!).catch((error) => setCreateError(error.message));
   }
 
   function chooseVariant(next: string) {
@@ -146,7 +161,7 @@ export default function HomePage() {
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
       <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div initial={prefersReducedMotion() ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-4xl font-black tracking-tighter">
             Welcome, <span className="text-blue-400">{account.username}</span>
           </h1>
@@ -189,6 +204,8 @@ export default function HomePage() {
           </section>
         )}
 
+        {listError && <p role="alert" className="text-sm text-amber-300">Game lists unavailable: {listError} <button type="button" className="underline" onClick={() => { setListError(null); setListRetry((value) => value + 1); }}>Retry</button></p>}
+
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
           <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Time control</h2>
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -197,6 +214,7 @@ export default function HomePage() {
                 key={option.label}
                 type="button"
                 onClick={() => setTc(option)}
+                aria-pressed={tc.label === option.label}
                 className={`flex flex-col items-center rounded-2xl border px-4 py-4 transition-colors ${
                   tc.label === option.label
                     ? 'border-blue-500 bg-blue-500/10'
@@ -209,6 +227,24 @@ export default function HomePage() {
             ))}
           </div>
 
+          <form className="mb-6 flex flex-wrap items-end gap-3" onSubmit={(event) => {
+            event.preventDefault();
+            const minutes = Number(customMinutes);
+            const increment = Number(customIncrement);
+            const estimate = minutes * 60 + increment * 40;
+            setTc({ label: `${minutes}+${increment}`, minutes, increment,
+              tag: estimate < 180 ? 'Bullet' : estimate < 480 ? 'Blitz' : estimate <= 1500 ? 'Rapid' : 'Classical' });
+          }}>
+            <label className="text-xs text-zinc-400">Minutes
+              <input type="number" min="1" max="180" step="1" required value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} className="mt-1 block w-24 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-white" />
+            </label>
+            <label className="text-xs text-zinc-400">Increment (seconds)
+              <input type="number" min="0" max="180" step="1" required value={customIncrement} onChange={(event) => setCustomIncrement(event.target.value)} className="mt-1 block w-28 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-white" />
+            </label>
+            <button type="submit" className="rounded border border-blue-500/40 px-3 py-2 text-sm text-blue-300">Use custom time</button>
+            <p className="w-full text-xs text-zinc-400">Selected: {tc.label} · {tc.tag}</p>
+          </form>
+
           <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:gap-2">
             <span className="col-span-3 mb-1 text-xs font-bold uppercase tracking-wider text-zinc-500 sm:mb-0 sm:mr-2">Variant</span>
             {VARIANTS.map((v) => (
@@ -216,6 +252,7 @@ export default function HomePage() {
                 key={v}
                 type="button"
                 onClick={() => chooseVariant(v)}
+                aria-pressed={variant === v}
                 className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold capitalize transition-colors sm:px-4 ${
                   variant === v ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
@@ -224,6 +261,13 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+
+          <label className="mt-5 block text-sm text-zinc-300">Computer strength
+            <select value={aiLevel} onChange={(event) => setAiLevel(event.target.value as typeof aiLevel)} className="ml-3 rounded border border-zinc-700 bg-zinc-950 px-3 py-2">
+              <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
+            </select>
+            <span className="mt-2 block text-xs text-zinc-500">Applies to all computer seats. Levels adjust search effort, not a guaranteed rating.</span>
+          </label>
         </section>
 
         {variant !== 'bughouse' && <section className="flex flex-col items-center rounded-3xl border border-blue-500/30 bg-gradient-to-b from-blue-500/10 to-transparent p-8 shadow-xl sm:flex-row sm:justify-between">

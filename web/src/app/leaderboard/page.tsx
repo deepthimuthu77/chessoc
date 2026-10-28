@@ -6,22 +6,29 @@ import { api, type LeaderboardRow } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 export default function LeaderboardPage() {
-  const { account, token, logout } = useAuth();
+  const { account, token, logout, ready, handleAuthError, authError, retryAuth } = useAuth();
   const [scope, setScope] = useState<'global' | 'friends'>('global');
-  const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [variant, setVariant] = useState('standard');
+  const [speed, setSpeed] = useState('blitz');
+  const [attempt, setAttempt] = useState(0);
+  const key = `${scope}:${variant}:${speed}:${scope === 'friends' ? token : ''}:${attempt}`;
+  const [result, setResult] = useState<{ key: string; rows: LeaderboardRow[]; error?: string } | null>(null);
+  const loading = !ready || result?.key !== key;
+  const rows = loading ? [] : result.rows;
 
   useEffect(() => {
-    setLoading(true);
-    const load = scope === 'friends' && token ? api.friendsLeaderboard(token) : api.leaderboard();
+    if (!ready || (scope === 'friends' && !token)) return;
+    let cancelled = false;
+    const load = scope === 'friends' ? api.friendsLeaderboard(token!, variant, speed) : api.leaderboard(variant, speed);
     load
-      .then((board) => setRows(board.entries))
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [scope, token]);
+      .then((board) => { if (!cancelled) setResult({ key, rows: board.entries }); })
+      .catch((error: unknown) => {
+        if (cancelled || (scope === 'friends' && handleAuthError(error, token))) return;
+        setResult({ key, rows: [], error: error instanceof Error ? error.message : 'Could not load leaderboard.' });
+      });
+    return () => { cancelled = true; };
+  }, [scope, token, ready, variant, speed, key, handleAuthError]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -32,16 +39,35 @@ export default function LeaderboardPage() {
           <h1 className="text-3xl font-black tracking-tighter">Leaderboard</h1>
           <div className="flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
             <Tab active={scope === 'global'} onClick={() => setScope('global')}>Global</Tab>
-            {token && <Tab active={scope === 'friends'} onClick={() => setScope('friends')}>Friends</Tab>}
+            {(token || scope === 'friends') && <Tab active={scope === 'friends'} onClick={() => setScope('friends')}>Friends</Tab>}
           </div>
         </div>
-        <p className="mb-4 text-xs font-bold uppercase tracking-wider text-zinc-600">Standard · Blitz</p>
+        {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
+        <div className="mb-4 flex flex-wrap gap-4">
+          <label className="flex flex-col gap-1 text-sm text-zinc-300">
+            Variant
+            <select value={variant} onChange={(e) => setVariant(e.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2">
+              <option value="standard">Standard</option><option value="crazyhouse">Crazyhouse</option><option value="bughouse">Bughouse</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-zinc-300">
+            Speed
+            <select value={speed} onChange={(e) => setSpeed(e.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2">
+              <option value="bullet">Bullet</option><option value="blitz">Blitz</option><option value="rapid">Rapid</option><option value="classical">Classical</option>
+            </select>
+          </label>
+        </div>
+        <p className="mb-4 text-sm capitalize text-zinc-400">{scope} · {variant} · {speed}</p>
 
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
-          {loading ? (
-            <Empty>Loading…</Empty>
+          {ready && scope === 'friends' && !token ? (
+            <Empty><Link href="/login" className="underline">Sign in to view the friends leaderboard.</Link></Empty>
+          ) : loading ? (
+            <Empty><span role="status">Loading leaderboard…</span></Empty>
+          ) : result?.error ? (
+            <Empty><div role="alert" className="text-rose-400"><p>Could not load leaderboard: {result.error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-3 underline">Retry leaderboard</button></div></Empty>
           ) : rows.length === 0 ? (
-            <Empty>No rated games yet — play a rated game to appear here.</Empty>
+            <Empty>{variant === 'bughouse' ? 'Bughouse games are casual and do not receive ratings.' : 'No rated players in this pool yet.'}</Empty>
           ) : (
             rows.map((row) => (
               <div
@@ -69,6 +95,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
         active ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'

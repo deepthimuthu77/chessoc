@@ -5,8 +5,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { api, type JoinResult } from '@/lib/api';
-import { getAuth, setAuth } from '@/lib/auth';
+import { api, ApiError, type JoinResult } from '@/lib/api';
+import { expireAuth, getAuth, setAuth } from '@/lib/auth';
 import { getSettings } from '@/lib/settings';
 import { playMoveSound } from '@/lib/sound';
 import { Capability, MessageType, type Color } from '@/lib/protocol';
@@ -30,8 +30,6 @@ import {
   toModalResult,
 } from '@/lib/view-model';
 
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 export interface PromotionPrompt {
   from: string;
   to: string;
@@ -48,7 +46,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const [receivedAt, setReceivedAt] = useState(0);
   const [partnerReceivedAt, setPartnerReceivedAt] = useState(0);
   const [rematchRequestRoom, setRematchRequestRoom] = useState<string | null>(null);
-  const [, forceTick] = useState(0);
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
 
   const transportRef = useRef<LiveTransport | null>(null);
   const versionRef = useRef<number>(0);
@@ -72,6 +70,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
       try {
         setJoinError(null);
         const storedSession = getAuth();
+        if (storedSession?.expired) throw new ApiError('Your session expired. Sign in again.', 401);
         let token: string;
         if (storedSession) {
           token = storedSession.token;
@@ -81,22 +80,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
           token = guestSession.token;
         }
 
-        let seat: JoinResult;
-        try {
-          seat = await api.join(room, token, preferredSeat ?? undefined);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : '';
-          const staleGuest = storedSession?.account.id.startsWith('guest-')
-            && ['token expired', 'malformed token', 'bad signature', 'malformed payload', 'bad token encoding']
-              .includes(message);
-          if (!staleGuest) {
-            throw error;
-          }
-          const guestSession = await api.guest();
-          setAuth(guestSession);
-          token = guestSession.token;
-          seat = await api.join(room, token, preferredSeat ?? undefined);
-        }
+        const seat = await api.join(room, token, preferredSeat ?? undefined);
         if (cancelled) return;
         setSeat(seat);
         setColor(seat.color);
@@ -109,7 +93,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
           freshTicket: async () => (await api.ticket(token)).ticket,
           lastVersion: () => versionRef.current,
           onEnvelope: (env) => {
-            setReceivedAt(Date.now());
+            if (env.payload && typeof env.payload === 'object' && 'snapshot' in env.payload && env.payload.snapshot) {
+              setReceivedAt(Date.now());
+            }
             dispatch({ type: 'envelope', env });
           },
           onStatus: (status) => dispatch({ type: 'status', status }),
@@ -131,7 +117,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
             freshTicket: async () => (await api.ticket(token)).ticket,
             lastVersion: () => partnerVersionRef.current,
             onEnvelope: (env) => {
-              setPartnerReceivedAt(Date.now());
+              if (env.payload && typeof env.payload === 'object' && 'snapshot' in env.payload && env.payload.snapshot) {
+                setPartnerReceivedAt(Date.now());
+              }
               partnerDispatch({ type: 'envelope', env });
             },
             onStatus: (status) => partnerDispatch({ type: 'status', status }),
@@ -140,7 +128,11 @@ export function useGame(room: string, preferredSeat?: string | null) {
         }
       } catch (error) {
         if (!cancelled) {
-          setJoinError(error instanceof Error ? error.message : 'Unable to join this room');
+          const current = getAuth();
+          if (error instanceof ApiError && error.status === 401 && current) expireAuth(current.token);
+          setJoinError(error instanceof ApiError && error.status === 401
+            ? 'Your session expired. Sign in again to return to this room.'
+            : error instanceof Error ? error.message : 'Unable to join this room');
           dispatch({ type: 'status', status: 'closed' });
         }
       }
@@ -152,12 +144,6 @@ export function useGame(room: string, preferredSeat?: string | null) {
       partnerTransport?.close();
     };
   }, [room, preferredSeat]);
-
-  // drive the clock display between server samples
-  useEffect(() => {
-    const id = setInterval(() => forceTick((t) => t + 1), 250);
-    return () => clearInterval(id);
-  }, []);
 
   // play a tick whenever a new move lands
   useEffect(() => {
@@ -251,6 +237,28 @@ export function useGame(room: string, preferredSeat?: string | null) {
 
   const snapshot = state.projection;
   const partnerSnapshot = partnerState.projection;
+  const whiteId = snapshot?.whitePlayerId;
+  const blackId = snapshot?.blackPlayerId;
+  const partnerWhiteId = partnerSnapshot?.whitePlayerId;
+  const partnerBlackId = partnerSnapshot?.blackPlayerId;
+  useEffect(() => {
+    let active = true;
+    for (const id of new Set([whiteId, blackId, partnerWhiteId, partnerBlackId])) {
+      if (!id || id.startsWith('engine') || id.startsWith('guest-')) continue;
+      api.profile(id).then((profile) => {
+        if (active) setPlayerNames((names) => ({ ...names, [id]: profile.account.username }));
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [whiteId, blackId, partnerWhiteId, partnerBlackId]);
+  const nameFor = (id: string | undefined, fallback: string | undefined) => !id ? 'Waiting for player'
+    : id.startsWith('engine') ? 'Computer'
+      : id.startsWith('guest-') ? `Guest ${id.slice(6, 12)}`
+        : playerNames[id] ?? (fallback && fallback !== 'waiting' ? fallback : 'Player');
+  const whiteName = nameFor(whiteId, seat?.whiteName);
+  const blackName = nameFor(blackId, seat?.blackName);
+  const partnerWhiteName = nameFor(partnerWhiteId, seat?.partnerWhiteName);
+  const partnerBlackName = nameFor(partnerBlackId, seat?.partnerBlackName);
   const myColor = color === 'spectator' ? null : color;
   const isPlayer = myColor != null;
   const isMyTurn = !!snapshot && !snapshot.result && isPlayer && snapshot.sideToMove === myColor;
@@ -289,22 +297,22 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const oppMaterial = materialScore(oppCaptured);
 
   const isDropVariant = isCrazyhouse || isBughouse;
-  const yourHand = snapshot && myColor ? parseHand(snapshot.fen, myColor) : [];
-  const oppHand = snapshot && myColor ? parseHand(snapshot.fen, other) : [];
+  const yourHand = useMemo(() => snapshot ? parseHand(snapshot.fen, myColor ?? 'white') : [], [snapshot, myColor]);
+  const oppHand = useMemo(() => snapshot ? parseHand(snapshot.fen, other) : [], [snapshot, other]);
   const dropTargets = interactive ? dropTargetsByPiece(state.capabilities) : {};
 
   const partnerColor = seat?.partnerColor === 'white' || seat?.partnerColor === 'black'
     ? seat.partnerColor
     : null;
   const partnerOther: Color = partnerColor === 'black' ? 'white' : 'black';
-  const partnerPieces = partnerSnapshot ? fenToPieces(partnerSnapshot.fen) : [];
+  const partnerPieces = useMemo(() => partnerSnapshot ? fenToPieces(partnerSnapshot.fen) : [], [partnerSnapshot]);
   const partnerClocks = partnerSnapshot
     ? displayClocks(partnerSnapshot.clockSample, partnerReceivedAt, !partnerSnapshot.result && clocksRunning)
     : { white: '--:--', black: '--:--' };
   const partnerOrientation: Color = getSettings().autoFlip && partnerColor === 'black' ? 'black' : 'white';
-  const partnerHand = partnerSnapshot && partnerColor ? parseHand(partnerSnapshot.fen, partnerColor) : [];
-  const partnerOppHand = partnerSnapshot && partnerColor ? parseHand(partnerSnapshot.fen, partnerOther) : [];
-  const partnerLastMove = partnerSnapshot ? lastMoveSquares(partnerSnapshot.moves) : null;
+  const partnerHand = useMemo(() => partnerSnapshot ? parseHand(partnerSnapshot.fen, partnerColor ?? 'white') : [], [partnerSnapshot, partnerColor]);
+  const partnerOppHand = useMemo(() => partnerSnapshot ? parseHand(partnerSnapshot.fen, partnerOther) : [], [partnerSnapshot, partnerOther]);
+  const partnerLastMove = useMemo(() => partnerSnapshot ? lastMoveSquares(partnerSnapshot.moves) : null, [partnerSnapshot]);
   const partnerCheckSquare = partnerSnapshot?.inCheck
     ? partnerPieces.find((p) => p.char === (partnerSnapshot.sideToMove === 'white' ? 'K' : 'k'))?.square ?? null
     : null;
@@ -355,6 +363,18 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const allowPremove = active && !isMyTurn && getSettings().premove;
 
   return {
+    whiteName,
+    blackName,
+    displayBoard: seat?.board === 'spectator' ? 'A' : seat?.board ?? 'A',
+    reviewId: seat?.roomId ?? room,
+    clockSample: snapshot?.clockSample,
+    receivedAt,
+    clocksRunning: !!snapshot && !snapshot.result && clocksRunning && state.connection === 'connected',
+    replay: async () => {
+      const token = getAuth()?.token;
+      if (!token) throw new Error('Sign in to create another game');
+      return (await api.replay(seat?.roomId ?? room, token)).gameId;
+    },
     status: state.connection,
     connected: !!snapshot,
     color: myColor,
@@ -370,13 +390,13 @@ export function useGame(room: string, preferredSeat?: string | null) {
     history: snapshot?.moves ?? [],
     result: snapshot?.result ? toModalResult(snapshot.result) : undefined,
     you: {
-      name: myColor ? capitalize(myColor) : 'Spectator',
+      name: myColor === 'black' ? blackName : whiteName,
       clock: myColor === 'black' ? clocks.black : clocks.white,
       captured: youCaptured,
       score: Math.max(0, youMaterial - oppMaterial),
     },
     opponent: {
-      name: isVsEngine ? 'Computer' : myColor ? capitalize(other) : 'Opponent',
+      name: myColor === 'black' ? whiteName : blackName,
       clock: myColor === 'black' ? clocks.white : clocks.black,
       captured: oppCaptured,
       score: Math.max(0, oppMaterial - youMaterial),
@@ -402,6 +422,11 @@ export function useGame(room: string, preferredSeat?: string | null) {
     dropTargets,
     sendDrop,
     partner: {
+      whiteName: partnerWhiteName,
+      blackName: partnerBlackName,
+      clockSample: partnerSnapshot?.clockSample,
+      receivedAt: partnerReceivedAt,
+      clocksRunning: !!partnerSnapshot && !partnerSnapshot.result && clocksRunning && partnerState.connection === 'connected',
       connected: !!partnerSnapshot,
       pieces: partnerPieces,
       lastMove: partnerLastMove,
@@ -411,11 +436,11 @@ export function useGame(room: string, preferredSeat?: string | null) {
       yourHand: partnerHand,
       oppHand: partnerOppHand,
       you: {
-        name: partnerColor ? capitalize(partnerColor) : 'Partner',
+        name: partnerColor === 'black' ? partnerBlackName : partnerWhiteName,
         clock: partnerColor === 'black' ? partnerClocks.black : partnerClocks.white,
       },
       opponent: {
-        name: partnerColor ? capitalize(partnerOther) : 'Opponent',
+        name: partnerColor === 'black' ? partnerWhiteName : partnerBlackName,
         clock: partnerColor === 'black' ? partnerClocks.white : partnerClocks.black,
       },
     },

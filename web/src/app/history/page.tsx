@@ -13,17 +13,28 @@ const RESULT_STYLE: Record<string, string> = {
 };
 
 export default function HistoryPage() {
-  const { account, token, ready, logout } = useAuth(true);
-  const [games, setGames] = useState<GameHistoryRow[]>([]);
+  const { account, token, ready, logout, handleAuthError, authError, retryAuth } = useAuth(true);
+  const [attempt, setAttempt] = useState(0);
+  const key = `${token}:${attempt}`;
+  const [result, setResult] = useState<{ key: string; games: GameHistoryRow[]; error?: string } | null>(null);
+  const loading = result?.key !== key;
+  const games = loading ? [] : result.games;
 
   useEffect(() => {
-    if (token) {
-      api.gamesMine(token).then((r) => setGames(r.games)).catch(() => setGames([]));
-    }
-  }, [token]);
+    if (!token) return;
+    let cancelled = false;
+    api.gamesMine(token).then((r) => {
+      if (!cancelled) setResult({ key, games: r.games });
+    }).catch((error: unknown) => {
+      if (!cancelled && !handleAuthError(error, token)) {
+        setResult({ key, games: [], error: error instanceof Error ? error.message : 'Could not load game history.' });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [token, key, handleAuthError]);
 
-  if (!ready || !account) {
-    return <main className="min-h-screen bg-slate-950" />;
+  if (!ready || !account || !token) {
+    return <main className="min-h-screen bg-slate-950 p-6 text-zinc-300"><p role="status">{ready ? 'Redirecting to sign in…' : 'Loading session…'}</p></main>;
   }
 
   return (
@@ -32,9 +43,17 @@ export default function HistoryPage() {
 
       <div className="mx-auto max-w-3xl px-6 py-12">
         <h1 className="mb-6 text-3xl font-black tracking-tighter">Game history</h1>
+        {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
-          {games.length === 0 ? (
+          {loading ? (
+            <p role="status" className="px-6 py-12 text-center text-zinc-400">Loading game history…</p>
+          ) : result?.error ? (
+            <div role="alert" className="px-6 py-12 text-center text-rose-400">
+              <p>Could not load game history: {result.error}</p>
+              <button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-3 underline">Retry history</button>
+            </div>
+          ) : games.length === 0 ? (
             <div className="px-6 py-12 text-center text-sm italic text-zinc-600">
               No finished games yet.
             </div>

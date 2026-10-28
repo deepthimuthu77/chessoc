@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useReducedMotion } from 'framer-motion';
+import { prefersReducedMotion } from '@/lib/settings';
 
 export const PIECE_POSITIONS: Record<string, { x: string; y: string }> = {
   K: { x: '0%', y: '0%' },
@@ -27,7 +28,11 @@ interface PieceProps {
   onPieceClick: (square: string, isDrag?: boolean) => void;
 }
 
-export function Piece({ char, col, row, squareName, interactive, onDrop, onPieceClick }: PieceProps) {
+export const Piece = React.memo(function Piece({ char, col, row, squareName, interactive, onDrop, onPieceClick }: PieceProps) {
+  const systemReducedMotion = useReducedMotion();
+  const reduce = systemReducedMotion || prefersReducedMotion();
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
   const position = PIECE_POSITIONS[char];
   if (!position) return null;
 
@@ -39,17 +44,22 @@ export function Piece({ char, col, row, squareName, interactive, onDrop, onPiece
     <motion.div
       className={`absolute z-10 h-[12.5%] w-[12.5%] p-1 md:p-2 ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
       initial={false}
+      style={{ x: dragX, y: dragY }}
       animate={{ left, top }}
-      whileHover={interactive ? { scale: 1.15 } : undefined}
-      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+      whileHover={interactive && !reduce ? { scale: 1.15 } : undefined}
+      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 200, damping: 25 }}
       drag={interactive}
       dragMomentum={false}
       onClick={() => interactive && onPieceClick(squareName)}
       onDragStart={() => interactive && onPieceClick(squareName, true)}
       onDragEnd={(_, info) => {
         if (interactive) onDrop(squareName, { x: info.point.x, y: info.point.y });
+        if (reduce) {
+          dragX.jump(0);
+          dragY.jump(0);
+        }
       }}
-      dragSnapToOrigin
+      dragSnapToOrigin={!reduce}
     >
       <div
         className="w-full h-full select-none drop-shadow-xl"
@@ -62,4 +72,4 @@ export function Piece({ char, col, row, squareName, interactive, onDrop, onPiece
       />
     </motion.div>
   );
-}
+});

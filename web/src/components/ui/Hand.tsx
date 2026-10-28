@@ -39,11 +39,11 @@ export function Hand({ pieces, selected = null, interactive = false, onSelect }:
             key={char}
             type="button"
             disabled={!interactive}
-            aria-label={`Drop ${NAMES[upper]} (${count} in hand)`}
+            aria-label={`${interactive ? 'Drop ' : ''}${char === upper ? 'white' : 'black'} ${NAMES[upper]} (${count} in reserve)`}
             aria-pressed={on}
             onClick={() => onSelect?.(upper)}
             className={`relative h-10 w-10 rounded-lg border transition-colors disabled:cursor-default ${
-              on ? 'border-emerald-400 bg-emerald-400/15' : 'border-zinc-700 bg-zinc-950 enabled:hover:border-zinc-500'
+              on ? 'border-emerald-400 bg-emerald-400/15' : 'border-zinc-600 bg-zinc-300 enabled:hover:border-blue-400'
             }`}
           >
             <span

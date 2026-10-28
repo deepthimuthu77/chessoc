@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Board } from '@/components/ui/Board';
 import { CapturedPieces } from '@/components/ui/CapturedPieces';
 import { Chat } from '@/components/ui/Chat';
@@ -10,8 +11,11 @@ import { ConnectionOverlay } from '@/components/ui/ConnectionOverlay';
 import { GameControls } from '@/components/ui/GameControls';
 import { GameOverModal } from '@/components/ui/GameOverModal';
 import { MoveHistory } from '@/components/ui/MoveHistory';
-import { PromotionPicker } from '@/components/ui/PromotionPicker';
+import { AccessiblePromotionPicker as PromotionPicker } from '@/components/ui/AccessiblePromotionPicker';
 import { useGame } from '@/hooks/use-game';
+import { ClockText } from '@/components/ui/ClockText';
+
+const NO_DROP_TARGETS: string[] = [];
 
 export default function RoomPage() {
   const params = useParams<{ id: string }>();
@@ -19,6 +23,7 @@ export default function RoomPage() {
   const searchParams = useSearchParams();
   const game = useGame(params.id, searchParams.get('seat'));
   const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
+  const [dismissedRoom, setDismissedRoom] = useState<string | null>(null);
 
   // The server creates the new game once the required players accept.
   useEffect(() => {
@@ -27,14 +32,15 @@ export default function RoomPage() {
     }
   }, [game.rematchGameId, router]);
 
-  const dropTargets = selectedDrop ? game.dropTargets[selectedDrop] ?? [] : [];
+  const dropTargets = selectedDrop ? game.dropTargets[selectedDrop] ?? NO_DROP_TARGETS : NO_DROP_TARGETS;
+  const { sendDrop } = game;
 
-  function onDropSquare(square: string) {
+  const onDropSquare = useCallback((square: string) => {
     if (selectedDrop && dropTargets.includes(square)) {
-      game.sendDrop(selectedDrop, square);
+      sendDrop(selectedDrop, square);
     }
     setSelectedDrop(null); // any click ends the drop selection
-  }
+  }, [selectedDrop, dropTargets, sendDrop]);
 
   const lastPly = game.history[game.history.length - 1];
   const announcement = game.result
@@ -46,15 +52,20 @@ export default function RoomPage() {
       : '';
 
   if (game.isBughouse) {
-    return <BughouseRoom game={game} />;
+    return <BughouseRoom key={params.id} game={game} />;
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 md:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-slate-950 p-4 md:p-8">
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
+      <div className="w-full max-w-7xl">
+        <RoomNavigation spectator={game.isSpectator} />
+        {game.isSpectator && <h1 className="mt-3 text-lg font-bold text-white">Watching {game.isCrazyhouse ? 'Crazyhouse' : 'Chess'}</h1>}
+        {game.result && <FinishedGame reviewId={game.reviewId} onShowResult={() => setDismissedRoom(null)} />}
+      </div>
       <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
         <div className="order-2 flex w-full max-w-md flex-col space-y-6 xl:order-1 xl:w-80">
-          <PlayerPanel label="Opponent" name={game.opponent.name} clock={game.opponent.clock} captured={game.opponent.captured} score={game.opponent.score} />
+          <PlayerPanel label={game.isSpectator ? 'Black' : 'Opponent'} name={game.color === 'black' ? game.whiteName : game.blackName} clock={roomClock(game, game.color === 'black' ? 'white' : 'black')} captured={game.opponent.captured} score={game.opponent.score} />
           {game.isDropVariant && <Hand pieces={game.oppHand} />}
           <MoveHistory history={game.history} />
           {game.isDropVariant && (
@@ -65,7 +76,7 @@ export default function RoomPage() {
               onSelect={(p) => setSelectedDrop((cur) => (cur === p ? null : p))}
             />
           )}
-          <PlayerPanel label="You" name={game.you.name} clock={game.you.clock} captured={game.you.captured} score={game.you.score} highlighted />
+          <PlayerPanel label={game.isSpectator ? 'White' : 'You'} name={game.color === 'black' ? game.blackName : game.whiteName} clock={roomClock(game, game.color === 'black' ? 'black' : 'white')} captured={game.you.captured} score={game.you.score} highlighted={!game.isSpectator} />
           <GameControls
             active={game.active}
             canAbort={game.canAbort}
@@ -107,18 +118,22 @@ export default function RoomPage() {
                 <p className="mt-2 max-w-sm text-sm text-zinc-400">
                   {game.error ?? 'The board remains read-only until an authenticated server projection arrives.'}
                 </p>
+                {game.error?.includes('session expired') && <Link href={`/login?reason=session-expired&next=${encodeURIComponent(`/room/${params.id}`)}`} className="mt-4 inline-block text-blue-400 underline">Sign in to return to this room</Link>}
               </div>
             </div>
           )}
-          {game.connected && <ConnectionOverlay status={game.status} />}
+          {game.connected && !game.result && <ConnectionOverlay status={game.status} />}
           <GameOverModal
-            isOpen={!!game.result}
+            isOpen={!!game.result && dismissedRoom !== params.id}
             result={game.result}
             onRematch={game.canRematch ? game.rematch : undefined}
             rematchPending={game.rematchPending}
+            onDismiss={() => setDismissedRoom(params.id)}
+            reviewHref={`/review/${encodeURIComponent(game.reviewId)}`}
+            isSpectator={game.isSpectator}
           />
           <PromotionPicker
-            open={!!game.promotion}
+            open={!!game.promotion && !game.result}
             color={game.promotionColor}
             onPick={game.choosePromotion}
             onCancel={game.cancelPromotion}
@@ -130,40 +145,79 @@ export default function RoomPage() {
 }
 
 function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
+  const router = useRouter();
   const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
-  const dropTargets = selectedDrop ? game.dropTargets[selectedDrop] ?? [] : [];
+  const [dismissed, setDismissed] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const dropTargets = selectedDrop ? game.dropTargets[selectedDrop] ?? NO_DROP_TARGETS : NO_DROP_TARGETS;
+  const { sendDrop } = game;
   const ready = game.seatsFilled === 4;
+  const board = game.displayBoard;
+  const partnerBoard = board === 'A' ? 'B' : 'A';
+  const bottomColor = game.color === 'black' ? 'black' : 'white';
+  const partnerBottomColor = game.isSpectator ? 'white' : bottomColor === 'white' ? 'black' : 'white';
+  const topHand = game.orientation === bottomColor ? game.oppHand : game.yourHand;
+  const bottomHand = game.orientation === bottomColor ? game.yourHand : game.oppHand;
+  const partnerTopHand = game.partner.orientation === partnerBottomColor ? game.partner.oppHand : game.partner.yourHand;
+  const partnerBottomHand = game.partner.orientation === partnerBottomColor ? game.partner.yourHand : game.partner.oppHand;
+  const whiteTeam = board === 'A' ? 'Blue' : 'Red';
+  const blackTeam = board === 'A' ? 'Red' : 'Blue';
+  const winnerLabel = game.result?.winner ? `Team ${game.result.winner === 'white' ? whiteTeam : blackTeam}` : undefined;
 
-  function onDropSquare(square: string) {
+  function playerName(color: 'white' | 'black', partner = false) {
+    return partner ? (color === 'white' ? game.partner.whiteName : game.partner.blackName) : (color === 'white' ? game.whiteName : game.blackName);
+  }
+
+  async function replay() {
+    if (game.isSpectator || replaying) return;
+    setReplaying(true);
+    setReplayError(null);
+    try {
+      const roomId = await game.replay();
+      router.push(`/room/${encodeURIComponent(roomId)}`);
+    } catch (error) {
+      setReplayError(error instanceof Error ? error.message : 'Unable to create a new game. Please try again.');
+      setReplaying(false);
+    }
+  }
+
+  const onDropSquare = useCallback((square: string) => {
     if (selectedDrop && dropTargets.includes(square)) {
-      game.sendDrop(selectedDrop, square);
+      sendDrop(selectedDrop, square);
     }
     setSelectedDrop(null);
-  }
+  }, [selectedDrop, dropTargets, sendDrop]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-5 text-white lg:px-8">
+      <div className="mx-auto mb-4 max-w-[1680px]">
+        <RoomNavigation spectator={game.isSpectator} />
+        {game.result && <FinishedGame reviewId={game.reviewId} onShowResult={() => setDismissed(false)} />}
+      </div>
       <header className="mx-auto mb-5 flex max-w-[1680px] flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-4">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">Bughouse</h1>
             <span className={`rounded px-2 py-1 text-xs font-bold uppercase ${
-              game.team === 'blue' ? 'bg-blue-500/15 text-blue-300' : 'bg-rose-500/15 text-rose-300'
+              game.isSpectator ? 'bg-zinc-800 text-zinc-300' : game.team === 'blue' ? 'bg-blue-500/15 text-blue-300' : 'bg-rose-500/15 text-rose-300'
             }`}>
-              Team {game.team}
+              {game.isSpectator ? 'Spectating' : `Team ${game.team}`}
             </span>
           </div>
           <p className="mt-1 text-sm text-zinc-500">
-            Board {game.board} · {game.humansJoined}/{game.humanTarget} human seats
+            {game.isSpectator ? 'Boards A and B' : `Board ${board}`} · {game.humansJoined}/{game.humanTarget} human seats
           </p>
+          <p className="mt-1 text-xs text-zinc-400">Blue: A White + B Black · Red: A Black + B White</p>
         </div>
         <InviteLinks roomId={game.roomId} availableSeats={game.availableSeats} />
       </header>
 
       <div className="mx-auto grid max-w-[1680px] gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.88fr)_18rem]">
         <section className="min-w-0">
-          <BoardLabel title={`Board ${game.board}`} subtitle="Your board" clock={game.opponent.clock} />
-          <Hand pieces={game.oppHand} />
+          <h2 className="text-lg font-bold">Board {board}{!game.isSpectator && ' · Your board'}</h2>
+          <BoardLabel title={`${game.orientation === 'white' ? 'Black' : 'White'} · Team ${game.orientation === 'white' ? blackTeam : whiteTeam}`} subtitle={playerName(game.orientation === 'white' ? 'black' : 'white')} clock={roomClock(game, game.orientation === 'white' ? 'black' : 'white')} />
+          <Hand pieces={topHand} selected={selectedDrop} interactive={!game.isSpectator && game.orientation !== bottomColor && game.interactive && ready} onSelect={(piece) => setSelectedDrop((current) => current === piece ? null : piece)} />
           <div className="relative mx-auto mt-2 max-w-[720px]">
             <Board
               pieces={game.pieces}
@@ -180,22 +234,23 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
               premove={game.premove}
               onPremove={game.setPremove}
             />
-            {!ready && <WaitingOverlay joined={game.humansJoined} target={game.humanTarget} />}
+            {!game.connected ? <UnavailableBoard error={game.error} /> : !game.result && !ready ? <WaitingOverlay joined={game.humansJoined} target={game.humanTarget} /> : !game.result && <ConnectionOverlay status={game.status} />}
           </div>
           <div className="mt-2">
             <Hand
-              pieces={game.yourHand}
+              pieces={bottomHand}
               selected={selectedDrop}
-              interactive={game.interactive && ready}
+              interactive={!game.isSpectator && game.orientation === bottomColor && game.interactive && ready}
               onSelect={(piece) => setSelectedDrop((current) => current === piece ? null : piece)}
             />
           </div>
-          <BoardLabel title="You" subtitle={game.you.name} clock={game.you.clock} active />
+          <BoardLabel title={`${game.orientation === 'white' ? 'White' : 'Black'} · Team ${game.orientation === 'white' ? whiteTeam : blackTeam}`} subtitle={playerName(game.orientation)} clock={roomClock(game, game.orientation)} active={!game.isSpectator} />
         </section>
 
         <section className="min-w-0 border-zinc-800 xl:border-l xl:pl-5">
-          <BoardLabel title={game.board === 'A' ? 'Board B' : 'Board A'} subtitle="Partner board" clock={game.partner.opponent.clock} />
-          <Hand pieces={game.partner.oppHand} />
+          <h2 className="text-lg font-bold">Board {partnerBoard}{!game.isSpectator && ' · Partner board'}</h2>
+          <BoardLabel title={`${game.partner.orientation === 'white' ? 'Black' : 'White'} · Team ${game.partner.orientation === 'white' ? whiteTeam : blackTeam}`} subtitle={playerName(game.partner.orientation === 'white' ? 'black' : 'white', true)} clock={roomClock(game, game.partner.orientation === 'white' ? 'black' : 'white', true)} />
+          <Hand pieces={partnerTopHand} />
           <div className="relative mx-auto mt-2 max-w-[620px]">
             <Board
               pieces={game.partner.pieces}
@@ -203,13 +258,14 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
               checkSquare={game.partner.checkSquare}
               orientation={game.partner.orientation}
             />
-            {!ready && <WaitingOverlay joined={game.humansJoined} target={game.humanTarget} />}
+            {!game.partner.connected ? <UnavailableBoard /> : !game.result && !ready && <WaitingOverlay joined={game.humansJoined} target={game.humanTarget} />}
           </div>
-          <div className="mt-2"><Hand pieces={game.partner.yourHand} /></div>
-          <BoardLabel title="Partner" subtitle={game.partner.you.name} clock={game.partner.you.clock} active />
+          <div className="mt-2"><Hand pieces={partnerBottomHand} /></div>
+          <BoardLabel title={`${game.partner.orientation === 'white' ? 'White' : 'Black'} · Team ${game.partner.orientation === 'white' ? blackTeam : whiteTeam}`} subtitle={playerName(game.partner.orientation, true)} clock={roomClock(game, game.partner.orientation, true)} active={!game.isSpectator} />
         </section>
 
         <aside className="flex min-w-0 flex-col gap-4 border-zinc-800 xl:border-l xl:pl-5">
+          <h2 className="text-sm font-bold text-zinc-400">Board {board} moves</h2>
           <MoveHistory history={game.history} />
           <GameControls
             active={game.active && ready}
@@ -227,15 +283,41 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
         </aside>
       </div>
 
-      <GameOverModal isOpen={!!game.result} result={game.result} />
+      <GameOverModal isOpen={!!game.result && !dismissed} result={game.result} onDismiss={() => setDismissed(true)} reviewHref={`/review/${encodeURIComponent(game.reviewId)}`} isSpectator={game.isSpectator} onRematch={game.isSpectator ? undefined : replay} rematchLabel="New game" rematchPending={replaying} error={replayError} winnerLabel={winnerLabel} />
       <PromotionPicker
-        open={!!game.promotion}
+        open={!!game.promotion && !game.result}
         color={game.promotionColor}
         onPick={game.choosePromotion}
         onCancel={game.cancelPromotion}
       />
     </main>
   );
+}
+
+function RoomNavigation({ spectator }: { spectator: boolean }) {
+  return <nav aria-label="Room navigation" className="flex flex-wrap gap-5 text-sm font-semibold text-blue-300">
+    {spectator && <Link href="/watch" className="hover:underline">← Back to Watch</Link>}
+    <Link href="/" className="hover:underline">Back to lobby</Link>
+  </nav>;
+}
+
+function roomClock(game: ReturnType<typeof useGame>, color: 'white' | 'black', partner = false) {
+  const source = partner ? game.partner : game;
+  return <ClockText sample={source.clockSample} receivedAt={source.receivedAt} running={source.clocksRunning} color={color} />;
+}
+
+function FinishedGame({ reviewId, onShowResult }: { reviewId: string; onShowResult: () => void }) {
+  return <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
+    <span>Game finished · Final position</span>
+    <Link href={`/review/${encodeURIComponent(reviewId)}`} className="font-semibold text-blue-300 hover:underline">Review game</Link>
+    <button type="button" onClick={onShowResult} className="font-semibold text-blue-300 hover:underline">Show result</button>
+  </div>;
+}
+
+function UnavailableBoard({ error }: { error?: string | null }) {
+  return <div role="status" className="absolute inset-0 flex items-center justify-center bg-slate-950/75 p-6 text-center text-sm text-zinc-300">
+    {error ?? 'Connecting to board…'}
+  </div>;
 }
 
 const SEAT_LABELS: Record<string, string> = {
@@ -247,12 +329,20 @@ const SEAT_LABELS: Record<string, string> = {
 
 function InviteLinks({ roomId, availableSeats }: { roomId: string; availableSeats: string[] }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [manualLink, setManualLink] = useState<string | null>(null);
 
   async function copySeat(seat?: string) {
     const suffix = seat ? `?seat=${seat}` : '';
-    await navigator.clipboard.writeText(`${window.location.origin}/room/${roomId}${suffix}`);
-    setCopied(seat ?? 'room');
-    window.setTimeout(() => setCopied(null), 1500);
+    const link = `${window.location.origin}/room/${roomId}${suffix}`;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(link);
+      setManualLink(null);
+      setCopied(seat ?? 'room');
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      setManualLink(link);
+    }
   }
 
   return (
@@ -274,6 +364,9 @@ function InviteLinks({ roomId, availableSeats }: { roomId: string; availableSeat
       >
         {copied === 'room' ? 'Copied' : availableSeats.length > 0 ? 'Copy open-seat link' : 'Copy room link'}
       </button>
+      {manualLink && <label className="w-full max-w-lg text-left text-xs text-zinc-300">Copy this invite link manually
+        <input readOnly value={manualLink} onFocus={(event) => event.target.select()} className="mt-2 block w-full rounded border border-zinc-600 bg-zinc-950 p-3 text-sm text-white" />
+      </label>}
     </div>
   );
 }
@@ -286,7 +379,7 @@ function BoardLabel({
 }: {
   title: string;
   subtitle: string;
-  clock: string;
+  clock: ReactNode;
   active?: boolean;
 }) {
   return (
@@ -321,7 +414,7 @@ function PlayerPanel({
 }: {
   label: string;
   name: string;
-  clock: string;
+  clock: ReactNode;
   captured: string[];
   score: number;
   highlighted?: boolean;

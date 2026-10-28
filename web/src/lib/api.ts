@@ -2,8 +2,13 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+
 async function request<T>(path: string, method: 'GET' | 'POST', body?: unknown, token?: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    signal: AbortSignal.timeout(15_000),
     method,
     headers: {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
@@ -13,7 +18,10 @@ async function request<T>(path: string, method: 'GET' | 'POST', body?: unknown, 
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((json as { error?: string }).error ?? `${path} failed (${res.status})`);
+    if (res.status === 401 && token && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('chessoc-session-expired', { detail: { token } }));
+    }
+    throw new ApiError((json as { error?: string }).error ?? `${path} failed (${res.status})`, res.status);
   }
   return json as T;
 }
@@ -30,6 +38,10 @@ export interface Session {
 }
 
 export interface JoinResult {
+  whiteName: string;
+  blackName: string;
+  partnerWhiteName?: string;
+  partnerBlackName?: string;
   roomId: string;
   gameId: string;
   partnerGameId: string;
@@ -162,6 +174,22 @@ export interface Ply {
   fen: string;
 }
 
+export interface ReviewBoard {
+  gameId: string;
+  label: string;
+  initialFen: string;
+  plies: Ply[];
+}
+
+export interface GameReview {
+  gameId: string;
+  roomId: string;
+  variant: string;
+  initialFen: string;
+  plies: Ply[];
+  boards: ReviewBoard[];
+}
+
 export interface Analysis {
   bestMove: string;
   score: { type: 'cp' | 'mate'; value: number };
@@ -178,6 +206,7 @@ export interface CreateOptions {
   color?: 'white' | 'black';
   humanPlayers?: number;
   humanSeats?: string[];
+  aiLevel?: 'easy' | 'medium' | 'hard';
 }
 
 export interface SeekOptions {
@@ -207,6 +236,7 @@ export const api = {
   ticket: (token: string) => request<{ ticket: string }>('/ticket', 'POST', {}, token),
   createGame: (opts: CreateOptions, token: string) =>
     request<{ gameId: string }>('/play/create', 'POST', opts, token),
+  replay: (room: string, token: string) => request<{ gameId: string }>('/play/rematch', 'POST', { room }, token),
 
   seek: (opts: SeekOptions, token: string) =>
     request<SeekResult>('/seek', 'POST', opts, token),
@@ -235,11 +265,12 @@ export const api = {
   gamesMine: (token: string) => request<{ games: GameHistoryRow[] }>('/games/mine', 'GET', undefined, token),
   gamesActive: (token: string) => request<{ games: ActiveGame[] }>('/games/active', 'GET', undefined, token),
   gameMoves: (id: string) =>
-    request<{ gameId: string; variant: string; plies: Ply[] }>(
+    request<GameReview>(
       `/game/moves?id=${encodeURIComponent(id)}`, 'GET'),
   analyze: (fen: string, variant = 'standard') =>
     request<Analysis>(`/analyze?fen=${encodeURIComponent(fen)}&variant=${variant}`, 'GET'),
   gamesLive: () => request<{ games: LiveGame[] }>('/games/live', 'GET'),
+  liveEventsUrl: `${API_BASE}/games/live/events`,
   gamesOpen: (token: string) => request<{ games: OpenGame[] }>('/games/open', 'GET', undefined, token),
   changePassword: (oldPassword: string, newPassword: string, token: string) =>
     request<{ ok: boolean }>('/account/password', 'POST', { oldPassword, newPassword }, token),

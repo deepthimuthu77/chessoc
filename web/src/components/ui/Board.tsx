@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Piece } from './Piece';
 
 export interface BoardPiece {
@@ -27,6 +27,8 @@ interface BoardProps {
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+const EMPTY_MOVES: Record<string, string[]> = {};
+const EMPTY_TARGETS: string[] = [];
 
 const PIECE_NAMES: Record<string, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 
@@ -48,15 +50,15 @@ function gridOf(square: string, flip: boolean): { col: number; row: number } {
   return flip ? { col: 7 - f, row: r - 1 } : { col: f, row: 8 - r };
 }
 
-export function Board({
+export const Board = memo(function Board({
   pieces,
-  legalMoves = {},
+  legalMoves = EMPTY_MOVES,
   lastMove = null,
   checkSquare = null,
   orientation = 'white',
   interactive = false,
   onMoveIntent,
-  dropTargets = [],
+  dropTargets = EMPTY_TARGETS,
   onDropSquare,
   allowPremove = false,
   myColor = null,
@@ -74,7 +76,7 @@ export function Board({
 
   const occupied = useMemo(() => new Set(pieces.map((p) => p.square)), [pieces]);
   const pieceBySquare = useMemo(() => new Map(pieces.map((p) => [p.square, p.char])), [pieces]);
-  const targetSet = new Set(selectedSquare ? legalMoves[selectedSquare] ?? [] : []);
+  const targetSet = useMemo(() => new Set(selectedSquare ? legalMoves[selectedSquare] ?? [] : []), [selectedSquare, legalMoves]);
 
   function isOwnPiece(square: string): boolean {
     const ch = pieceBySquare.get(square);
@@ -94,7 +96,6 @@ export function Board({
   // Drop the transient from-selection whenever premove mode ends (e.g. our turn arrives).
   useEffect(() => {
     if (!premoveMode) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPremoveFrom(null);
     }
   }, [premoveMode]);
@@ -111,7 +112,7 @@ export function Board({
     }
   }
 
-  function attemptMove(fromSquare: string, toSquare: string) {
+  const attemptMove = useCallback((fromSquare: string, toSquare: string) => {
     const legal = (legalMoves[fromSquare] ?? []).includes(toSquare);
     if (!interactive || !legal) {
       setSelectedSquare(null);
@@ -119,9 +120,9 @@ export function Board({
     }
     onMoveIntent?.(fromSquare, toSquare);
     setSelectedSquare(null);
-  }
+  }, [interactive, legalMoves, onMoveIntent]);
 
-  function handlePieceClick(square: string, isDrag = false) {
+  const handlePieceClick = useCallback((square: string, isDrag = false) => {
     if (!interactive) return;
     if (dropMode) {
       onDropSquare?.(square); // clicking a piece cancels the drop (parent clears selection)
@@ -132,9 +133,9 @@ export function Board({
     } else {
       setSelectedSquare(square);
     }
-  }
+  }, [interactive, dropMode, onDropSquare, selectedSquare, targetSet, attemptMove]);
 
-  function handleDrop(fromSquare: string, point: { x: number; y: number }) {
+  const handleDrop = useCallback((fromSquare: string, point: { x: number; y: number }) => {
     if (!boardRef.current || !interactive) return;
     const rect = boardRef.current.getBoundingClientRect();
     const x = point.x - rect.left;
@@ -146,7 +147,7 @@ export function Board({
     const col = Math.floor((x / rect.width) * 8);
     const row = Math.floor((y / rect.height) * 8);
     attemptMove(fromSquare, squareAt(col, row, flip));
-  }
+  }, [interactive, flip, attemptMove]);
 
   return (
     <div
@@ -245,4 +246,4 @@ export function Board({
       </div>
     </div>
   );
-}
+});

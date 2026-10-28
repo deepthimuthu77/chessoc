@@ -9,15 +9,31 @@ import { RatingChart } from '@/components/ui/RatingChart';
 
 export default function ProfilePage() {
   const params = useParams<{ id: string }>();
-  const { account, token, logout } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [added, setAdded] = useState(false);
+  return <ProfileContent key={params.id} id={params.id} />;
+}
+
+function ProfileContent({ id }: { id: string }) {
+  const { account, token, logout, handleAuthError, authError, retryAuth } = useAuth();
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ attempt: number; profile?: Profile; error?: string } | null>(null);
+  const loading = result?.attempt !== attempt;
+  const profile = loading ? null : result.profile;
+  const [friendNote, setFriendNote] = useState<string | null>(null);
+  const [friendError, setFriendError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [pool, setPool] = useState<{ variant: string; speed: string } | null>(null);
-  const [history, setHistory] = useState<RatingPoint[]>([]);
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [historyResult, setHistoryResult] = useState<{ key: string; points: RatingPoint[]; error?: string } | null>(null);
 
   useEffect(() => {
-    api.profile(params.id).then(setProfile).catch(() => setProfile(null));
-  }, [params.id]);
+    let cancelled = false;
+    api.profile(id).then((profile) => {
+      if (!cancelled) setResult({ attempt, profile });
+    }).catch((error: unknown) => {
+      if (!cancelled) setResult({ attempt, error: error instanceof Error ? error.message : 'Could not load profile.' });
+    });
+    return () => { cancelled = true; };
+  }, [id, attempt]);
 
   // Chart pool: the user's pick, else the pool with the most games. Derived, not stored.
   const topPool = profile && profile.pools.length > 0
@@ -25,25 +41,51 @@ export default function ProfilePage() {
     : null;
   const selVariant = pool?.variant ?? topPool?.variant ?? null;
   const selSpeed = pool?.speed ?? topPool?.speed ?? null;
+  const historyKey = `${id}:${selVariant}:${selSpeed}:${historyAttempt}`;
+  const historyLoading = historyResult?.key !== historyKey;
 
   useEffect(() => {
-    if (selVariant && selSpeed) {
-      api.ratingHistory(params.id, selVariant, selSpeed)
-        .then((r) => setHistory(r.points))
-        .catch(() => setHistory([]));
-    }
-  }, [params.id, selVariant, selSpeed]);
+    if (!selVariant || !selSpeed) return;
+    let cancelled = false;
+    api.ratingHistory(id, selVariant, selSpeed)
+      .then((r) => { if (!cancelled) setHistoryResult({ key: historyKey, points: r.points }); })
+      .catch((error: unknown) => {
+        if (!cancelled) setHistoryResult({ key: historyKey, points: [], error: error instanceof Error ? error.message : 'Could not load rating history.' });
+      });
+    return () => { cancelled = true; };
+  }, [id, selVariant, selSpeed, historyKey]);
 
-  const isSelf = account?.id === params.id;
+  const isSelf = account?.id === id;
+
+  async function addFriend() {
+    if (!profile || !token || adding) return;
+    setAdding(true);
+    setFriendError(null);
+    try {
+      const response = await api.addFriend(profile.account.username, token);
+      if (!response.ok || !['friends', 'already_friends', 'requested'].includes(response.status)) {
+        throw new Error('The friend request was not sent. Please retry.');
+      }
+      setFriendNote(response.status === 'friends' ? 'You are now friends.'
+        : response.status === 'already_friends' ? 'Already friends.' : 'Request sent.');
+    } catch (error) {
+      if (!handleAuthError(error, token)) setFriendError(error instanceof Error ? error.message : 'Could not add friend. Please retry.');
+    } finally {
+      setAdding(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
 
       <div className="mx-auto max-w-2xl px-6 py-12">
-        {!profile ? (
-          <p className="text-center text-zinc-600">Loading…</p>
-        ) : (
+        {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
+        {loading ? (
+          <p role="status" className="text-center text-zinc-400">Loading profile…</p>
+        ) : result?.error ? (
+          <div role="alert" className="text-center text-rose-400"><p>Could not load profile: {result.error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-3 underline">Retry profile</button></div>
+        ) : !profile ? null : (
           <>
             <div className="mb-8 flex items-center justify-between">
               <div>
@@ -58,13 +100,15 @@ export default function ProfilePage() {
             {token && !isSelf && (
               <button
                 type="button"
-                disabled={added}
-                onClick={() => api.addFriend(profile.account.username, token).then(() => setAdded(true)).catch(() => {})}
+                disabled={adding || !!friendNote}
+                onClick={addFriend}
                 className="mb-8 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
               >
-                {added ? 'Request sent' : 'Add friend'}
+                {adding ? 'Sending…' : friendNote ?? 'Add friend'}
               </button>
             )}
+            {friendNote && <p role="status" className="mb-4 text-blue-400">{friendNote}</p>}
+            {friendError && <p role="alert" className="mb-4 text-rose-400">{friendError} Use Add friend to retry.</p>}
 
             <div className="grid grid-cols-3 gap-4">
               <Stat label="Wins" value={profile.stats.wins} accent="text-green-400" />
@@ -82,6 +126,7 @@ export default function ProfilePage() {
                       <button
                         key={i}
                         type="button"
+                        aria-pressed={on}
                         onClick={() => setPool({ variant: p.variant, speed: p.speed })}
                         className={`flex w-full items-center justify-between border-b border-zinc-800/70 px-6 py-3 text-left transition-colors last:border-0 ${
                           on ? 'bg-blue-500/10' : 'hover:bg-zinc-800/40'
@@ -100,11 +145,14 @@ export default function ProfilePage() {
                     <div className="mb-2 px-2 text-xs font-medium capitalize text-zinc-500">
                       {selVariant} · {selSpeed} history
                     </div>
-                    <RatingChart points={history} />
+                    {historyLoading ? <p role="status" className="p-4 text-zinc-400">Loading rating history…</p>
+                      : historyResult?.error ? <div role="alert" className="p-4 text-rose-400"><p>Could not load rating history: {historyResult.error}</p><button type="button" onClick={() => setHistoryAttempt((n) => n + 1)} className="mt-2 underline">Retry rating history</button></div>
+                      : <RatingChart points={historyResult?.points ?? []} />}
                   </div>
                 )}
               </div>
             )}
+            {profile.pools.length === 0 && <p className="mt-8 text-zinc-400">No rated games yet.</p>}
           </>
         )}
       </div>
