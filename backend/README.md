@@ -10,10 +10,12 @@ vector64 engine. See `doc/BACKEND_ARCHITECTURE.md` and `doc/ENGINE_INTEGRATION.m
 docker compose up --build
 ```
 
-Brings up Postgres, the engine service, the server (HTTP 8080, WSS 8081), and a production web build
-(`../web`, Next.js standalone) on host port 3001. The engine service is a thin TCP front over the
-validator line protocol: with no binary it runs a correct dev engine (python-chess, standard +
-crazyhouse); to use the real vector64 binary, mount it and set `ENGINE_CMD` in `docker-compose.yml`.
+Brings up Postgres, the server (HTTP 8080, WSS 8081), and a production web build
+(`../web`, Next.js standalone) on host port 3001. The server image bundles the official vector-64
+v1.1.1 Linux binaries: lean validators and the full search engine with embedded NNUE. Docker downloads
+the release assets and notices and verifies pinned SHA-256 hashes during the build. Both amd64
+(x86-64-v2) and arm64 are supported. The optional Python engine is available under the `dev-engine`
+Compose profile. Set `CHESSOC_HTTP_HOST_PORT` to change the direct API host port if 8080 is occupied.
 
 Caddy serves the complete app on both `http://<host-ip>` and `https://<host-ip>`. With no DNS name,
 HTTPS uses Caddy's local CA and creates a certificate for the requested LAN IP. After the first HTTPS
@@ -34,8 +36,9 @@ java -cp "build/install/chessoc-server/lib/*" com.chessoc.server.app.SmokeClient
 
 ### Use the real vector64 binary
 
-The engine binary is native and cannot run inside the Linux image, so it runs on the host behind the
-engine bridge; the containerized server reaches it over `host.docker.internal`:
+The default stack already runs the real Linux engine. To use a separate Windows or local build,
+run it on the host behind the engine bridge; the containerized server reaches it over
+`host.docker.internal`:
 
 ```bash
 # 1. host: expose the binary over TCP (one engine process per connection)
@@ -46,8 +49,12 @@ java -cp "build/install/chessoc-server/lib/*" \
 docker compose -f docker-compose.yml -f docker-compose.binary.yml up -d server
 ```
 
-Fully containerizing the real engine instead needs a Linux build of it, run in the `engine` service
-with `ENGINE_CMD` (which proxies the same line protocol to the binary).
+The TCP overlay takes precedence over the bundled process commands.
+
+The downloaded Windows v1.1.1 full engine is stored locally at
+`engine/bin/v1.1.1/STK-Vector-64-all.exe` (ignored by Git). Its official SHA-256 is
+`98641ff620a66514f5ebad5cedb27a756bd6dc5a90f1e2104642352bbfedc6ab`.
+Release assets and source: https://github.com/fcmv/Vector-64/releases/tag/v1.1.1.
 
 ## Build & run (local)
 
