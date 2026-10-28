@@ -82,6 +82,15 @@ class HttpAuthApiTest {
         return mapper.readTree(response.body());
     }
 
+    private JsonNode get(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + api.port() + path))
+                .GET().build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        return mapper.readTree(response.body());
+    }
+
     @Test
     void registerLoginJoinAndCreate() throws Exception {
         JsonNode alice = post("/auth/register",
@@ -103,6 +112,51 @@ class HttpAuthApiTest {
         assertThat(a.path("color").asText()).isEqualTo("white");
         assertThat(b.path("color").asText()).isEqualTo("black");
         assertThat(b.path("gameId").asText()).isEqualTo(a.path("gameId").asText());
+    }
+
+    @Test
+    void liveGamesExposeBoardSnapshotsAndAggregateBughouse() throws Exception {
+        String aliceToken = post("/auth/register",
+                "{\"username\":\"livealice\",\"email\":\"live-a@x.com\",\"password\":\"secret1\"}", null)
+                .path("token").asText();
+        String bobToken = post("/auth/register",
+                "{\"username\":\"livebob\",\"email\":\"live-b@x.com\",\"password\":\"secret1\"}", null)
+                .path("token").asText();
+
+        String standardRoom = post("/play/create",
+                "{\"variant\":\"standard\",\"minutes\":3,\"increment\":2}", aliceToken)
+                .path("gameId").asText();
+        post("/join", "{\"room\":\"" + standardRoom + "\"}", bobToken);
+        String bughouseRoom = post("/play/create",
+                "{\"variant\":\"bughouse\",\"minutes\":5,\"humanPlayers\":1}", aliceToken)
+                .path("gameId").asText();
+
+        JsonNode games = get("/games/live").path("games");
+        JsonNode standard = findGame(games, standardRoom);
+        assertThat(standard.path("variant").asText()).isEqualTo("standard");
+        assertThat(standard.path("speed").asText()).isEqualTo("blitz");
+        assertThat(standard.path("minutes").asInt()).isEqualTo(3);
+        assertThat(standard.path("increment").asInt()).isEqualTo(2);
+        assertThat(standard.path("boards")).hasSize(1);
+        assertThat(standard.path("boards").get(0).path("fen").asText()).isNotBlank();
+        assertThat(standard.path("boards").get(0).path("moveCount").asInt()).isZero();
+        assertThat(standard.path("boards").get(0).path("lastMove").asText()).isEmpty();
+        assertThat(standard.path("boards").get(0).path("whiteRemainingMs").asLong()).isEqualTo(180_000);
+
+        JsonNode bughouse = findGame(games, bughouseRoom);
+        assertThat(bughouse.path("variant").asText()).isEqualTo("bughouse");
+        assertThat(bughouse.path("boards")).hasSize(2);
+        assertThat(bughouse.path("boards").get(0).path("label").asText()).isEqualTo("A");
+        assertThat(bughouse.path("boards").get(1).path("label").asText()).isEqualTo("B");
+    }
+
+    private static JsonNode findGame(JsonNode games, String gameId) {
+        for (JsonNode game : games) {
+            if (gameId.equals(game.path("gameId").asText())) {
+                return game;
+            }
+        }
+        throw new AssertionError("live game not found: " + gameId);
     }
 
     @Test

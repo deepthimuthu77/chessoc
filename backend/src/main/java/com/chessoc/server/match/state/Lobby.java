@@ -295,6 +295,11 @@ public final class Lobby {
         return match == null ? gameId : match.roomId();
     }
 
+    public List<MatchGame> bughouseBoards(String gameId) {
+        BughouseMatch match = bughouseByRoom.get(gameId);
+        return match == null ? List.of() : List.of(match.boardA(), match.boardB());
+    }
+
     private Seat standardSeat(String room, String gameId, String color) {
         MatchGame game = matches.get(gameId).orElseThrow();
         int occupied = game.blackId() == null ? 1 : 2;

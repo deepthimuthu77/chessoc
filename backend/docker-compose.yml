@@ -48,7 +48,7 @@ services:
       CHESSOC_DB_PASSWORD: chessoc
       CHESSOC_TOKEN_SECRET: dev-secret-change-me
     ports:
-      - "8080:8080"
+      - "${CHESSOC_HTTP_HOST_PORT:-8080}:8080"
       - "8081:8081"
 
   # Production web build. For local UI work run `npm run dev` in ../web instead.

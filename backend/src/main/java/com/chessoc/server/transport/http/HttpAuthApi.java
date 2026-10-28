@@ -9,11 +9,13 @@ import com.chessoc.server.engine.SearchBudget;
 import com.chessoc.server.engine.SearchResult;
 import com.chessoc.server.domain.Uci;
 import com.chessoc.server.games.GameRecord;
+import com.chessoc.server.match.SpeedBucket;
 import com.chessoc.server.match.TimeControl;
 import com.chessoc.server.match.state.Lobby;
 import com.chessoc.server.match.state.MatchGame;
 import com.chessoc.server.match.state.PersistedPly;
 import com.chessoc.server.protocol.ProtocolMapper;
+import com.chessoc.server.protocol.GameSnapshot;
 import com.chessoc.server.rating.LeaderboardEntry;
 import com.chessoc.server.rating.PoolRating;
 import com.chessoc.server.rating.RatingHistoryPoint;
@@ -605,7 +607,9 @@ public final class HttpAuthApi {
             if (g.variant() == Variant.BUGHOUSE && !s.lobby().isPrimaryBughouseBoard(g.gameId())) {
                 continue;
             }
-            if (g.blackId() == null) {
+            List<MatchGame> boards = g.variant() == Variant.BUGHOUSE
+                    ? s.lobby().bughouseBoards(g.gameId()) : List.of(g);
+            if (boards.isEmpty() || boards.stream().anyMatch(board -> board.blackId() == null)) {
                 continue; // still waiting for an opponent
             }
             Map<String, Object> row = new LinkedHashMap<>();
@@ -613,10 +617,39 @@ public final class HttpAuthApi {
             row.put("white", displayName(g.whiteId()));
             row.put("black", displayName(g.blackId()));
             row.put("variant", g.variant().name().toLowerCase());
-            row.put("spectators", g.spectatorCount());
+            row.put("speed", SpeedBucket.of(g.timeControl()).name().toLowerCase());
+            row.put("minutes", (int) (g.timeControl().baseMs() / 60_000));
+            row.put("increment", (int) (g.timeControl().incrementMs() / 1_000));
+            row.put("rated", g.rated());
+            row.put("spectators", boards.stream().mapToInt(MatchGame::spectatorCount).max().orElse(0));
+            row.put("moveCount", boards.stream().mapToInt(board -> board.currentSnapshot().moves().size()).sum());
+            List<Map<String, Object>> boardRows = new ArrayList<>();
+            for (int index = 0; index < boards.size(); index++) {
+                boardRows.add(liveBoard(boards.get(index), boards.size() == 1 ? "" : index == 0 ? "A" : "B"));
+            }
+            row.put("boards", boardRows);
             out.add(row);
         }
         send(x, 200, Map.of("games", out));
+    }
+
+    private Map<String, Object> liveBoard(MatchGame game, String label) {
+        GameSnapshot snapshot = game.currentSnapshot();
+        Map<String, Object> board = new LinkedHashMap<>();
+        board.put("gameId", game.gameId());
+        board.put("label", label);
+        board.put("white", displayName(game.whiteId()));
+        board.put("black", displayName(game.blackId()));
+        board.put("fen", snapshot.fen().raw());
+        board.put("sideToMove", snapshot.sideToMove().name().toLowerCase());
+        board.put("moveCount", snapshot.moves().size());
+        board.put("lastMove", snapshot.moves().isEmpty()
+                ? "" : snapshot.moves().get(snapshot.moves().size() - 1).value());
+        board.put("whiteRemainingMs", snapshot.clockSample().whiteRemainingMs());
+        board.put("blackRemainingMs", snapshot.clockSample().blackRemainingMs());
+        board.put("serverTimestamp", snapshot.clockSample().serverTimestamp());
+        board.put("inCheck", snapshot.inCheck());
+        return board;
     }
 
     private void gamesOpen(HttpExchange x) throws IOException {
