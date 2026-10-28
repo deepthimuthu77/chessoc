@@ -69,6 +69,7 @@ class PooledEngineAdapterTest {
         adapter.bestMove(Variant.CRAZYHOUSE, START, SearchBudget.movetime(100));
 
         assertThat(seen.get()).contains("setoption name SearchJson value true");
+        assertThat(seen.get()).contains("setoption name Threads value 1");
     }
 
     @Test

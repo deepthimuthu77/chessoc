@@ -42,6 +42,7 @@ public final class Lobby {
     private final LiveRoomRepository liveRooms;
     private final Map<String, String> gameByRoom = new ConcurrentHashMap<>();
     private final Map<String, BughouseMatch> bughouseByRoom = new ConcurrentHashMap<>();
+    private final Map<String, String> aiLevels = new ConcurrentHashMap<>();
 
     public Lobby(MatchService matches, RatingService ratings, GamesRepository games, SearchClient engine,
                  TimeControl casualTimeControl, LongSupplier clock) {
@@ -61,7 +62,7 @@ public final class Lobby {
         restoreLiveRooms();
     }
 
-    public synchronized String createVsEngine(String humanId, Variant variant, TimeControl tc, Side humanColor) {
+    public String createVsEngine(String humanId, Variant variant, TimeControl tc, Side humanColor) {
         if (variant == Variant.BUGHOUSE) {
             return createBughouse(humanId, tc, humanColor, 1);
         }
@@ -73,16 +74,16 @@ public final class Lobby {
         MatchGame game = matches.create(new GameSpec(gameId, variant, start, whiteId, blackId, tc, false));
         gameByRoom.put(gameId, gameId);
         wireStandard(gameId, game);
-        game.setAi(aiSide, aiMover());
+        game.setAi(aiSide, aiMover(gameId));
         persistStandard(gameId, game);
         return gameId;
     }
 
-    public synchronized Seat join(String room, String playerId) {
+    public Seat join(String room, String playerId) {
         return join(room, playerId, null);
     }
 
-    public synchronized Seat join(String room, String playerId, String requestedSeat) {
+    public Seat join(String room, String playerId, String requestedSeat) {
         BughouseMatch bughouse = bughouseByRoom.get(room);
         if (bughouse != null) {
             BughouseMatch.Seat seat = bughouse.join(playerId, requestedSeat);
@@ -102,7 +103,7 @@ public final class Lobby {
         return seat;
     }
 
-    public synchronized String create(String creatorId, Variant variant, TimeControl timeControl, boolean rated) {
+    public String create(String creatorId, Variant variant, TimeControl timeControl, boolean rated) {
         if (variant == Variant.BUGHOUSE) {
             return createBughouse(creatorId, timeControl, Side.WHITE, 4);
         }
@@ -119,7 +120,7 @@ public final class Lobby {
         return matches.create(new GameSpec(gameId, variant, start, whiteId, null, tc, rated)).gameId();
     }
 
-    public synchronized String createPaired(String whiteId, String blackId, Variant variant,
+    public String createPaired(String whiteId, String blackId, Variant variant,
                                             TimeControl tc, boolean rated) {
         if (variant == Variant.BUGHOUSE) {
             throw new IllegalArgumentException("bughouse matchmaking requires four players");
@@ -134,12 +135,12 @@ public final class Lobby {
         return gameId;
     }
 
-    public synchronized String createBughouse(String creatorId, TimeControl timeControl,
+    public String createBughouse(String creatorId, TimeControl timeControl,
                                               Side creatorColor, int humanPlayers) {
         return createBughouse(creatorId, timeControl, creatorColor, null, humanPlayers);
     }
 
-    public synchronized String createBughouse(String creatorId, TimeControl timeControl,
+    public String createBughouse(String creatorId, TimeControl timeControl,
                                               Side creatorColor, Set<String> humanSeats) {
         return createBughouse(creatorId, timeControl, creatorColor, humanSeats, humanSeats.size());
     }
@@ -150,10 +151,10 @@ public final class Lobby {
         BughouseMatch match = humanSeats == null
                 ? new BughouseMatch(roomId, matches, Fen.parse(CRAZYHOUSE_START), timeControl,
                         creatorId, creatorColor, humanPlayers,
-                        humanPlayers < 4 ? aiMover() : null, this::onComplete)
+                        humanPlayers < 4 ? aiMover(roomId) : null, this::onComplete)
                 : new BughouseMatch(roomId, matches, Fen.parse(CRAZYHOUSE_START), timeControl,
                         creatorId, creatorColor, humanSeats,
-                        humanSeats.size() < 4 ? aiMover() : null, this::onComplete);
+                        humanSeats.size() < 4 ? aiMover(roomId) : null, this::onComplete);
         indexBughouse(match);
         match.onStateChange(() -> persistBughouse(match));
         persistBughouse(match);
@@ -165,24 +166,29 @@ public final class Lobby {
             liveRooms.delete(roomId);
             onComplete(game, result);
         });
-        game.onRematch(this::createPaired);
+        game.onRematch((white, black, variant, tc, rated) -> {
+            String next = createPaired(white, black, variant, tc, rated);
+            configureAiLevel(next, aiLevels.getOrDefault(roomId, "medium"));
+            return next;
+        });
         game.onStateChange(() -> persistStandard(roomId, game));
     }
 
     private void wireEngineSeat(MatchGame game) {
         if (ENGINE_ID.equals(game.whiteId())) {
-            game.setAi(Side.WHITE, aiMover());
+            game.setAi(Side.WHITE, aiMover(game.gameId()));
         }
         if (ENGINE_ID.equals(game.blackId())) {
-            game.setAi(Side.BLACK, aiMover());
+            game.setAi(Side.BLACK, aiMover(game.gameId()));
         }
     }
 
     private void restoreLiveRooms() {
         for (LiveRoomState state : liveRooms.loadAll()) {
+            aiLevels.put(state.roomId(), state.aiLevel() == null ? "medium" : state.aiLevel());
             TimeControl tc = timeControl(state);
             if ("bughouse".equalsIgnoreCase(state.variant())) {
-                BughouseMatch match = BughouseMatch.restore(state, matches, tc, aiMover(), (game, result) -> {
+                BughouseMatch match = BughouseMatch.restore(state, matches, tc, aiMover(state.roomId()), (game, result) -> {
                     liveRooms.delete(state.roomId());
                     onComplete(game, result);
                 });
@@ -216,14 +222,17 @@ public final class Lobby {
         TimeControl tc = game.timeControl();
         liveRooms.save(new LiveRoomState(roomId, game.variant().name().toLowerCase(),
                 tc.baseMs(), tc.incrementMs(), tc.delayType().name(), tc.delayMs(), game.rated(),
-                2, List.of(), clock.getAsLong(), List.of(game.recoveryState())));
+                2, List.of(), clock.getAsLong(), List.of(game.recoveryState()), aiLevels.getOrDefault(roomId, "medium")));
     }
 
     private void persistBughouse(BughouseMatch match) {
         if (match.boardA().isOver() || match.boardB().isOver()) {
             liveRooms.delete(match.roomId());
         } else {
-            liveRooms.save(match.recoveryState(clock.getAsLong()));
+            LiveRoomState state = match.recoveryState(clock.getAsLong());
+            liveRooms.save(new LiveRoomState(state.roomId(), state.variant(), state.baseMs(), state.incrementMs(),
+                    state.delayType(), state.delayMs(), state.rated(), state.humanTarget(), state.humanSeats(),
+                    state.savedAtEpochMs(), state.boards(), aiLevels.getOrDefault(match.roomId(), "medium")));
         }
     }
 
@@ -233,8 +242,41 @@ public final class Lobby {
         bughouseByRoom.put(match.boardB().gameId(), match);
     }
 
-    private MatchGame.AiMover aiMover() {
-        return (variant, fen) -> engine.bestMove(variant, fen, SearchBudget.movetime(600)).bestMove();
+    private MatchGame.AiMover aiMover(String roomId) {
+        return (variant, fen) -> {
+            SearchBudget budget = switch (aiLevels.getOrDefault(roomId, "medium")) {
+                case "easy" -> SearchBudget.nodes(300);
+                case "hard" -> SearchBudget.movetime(1200);
+                default -> SearchBudget.movetime(400);
+            };
+            return engine.bestMove(variant, fen, budget).bestMove();
+        };
+    }
+
+    public void configureAiLevel(String room, String level) {
+        if (!Set.of("easy", "medium", "hard").contains(level)) {
+            throw new IllegalArgumentException("AI level must be easy, medium or hard");
+        }
+        String id = bughouseRoomId(room);
+        aiLevels.put(id, level);
+        BughouseMatch match = bughouseByRoom.get(id);
+        if (match != null) persistBughouse(match);
+        else matches.get(id).ifPresent(game -> persistStandard(id, game));
+    }
+
+    public String replay(String room, String playerId) {
+        BughouseMatch match = bughouseByRoom.get(room);
+        if (match == null || !match.isParticipant(playerId) || playerId.startsWith(ENGINE_ID)) {
+            throw new IllegalArgumentException("Only a player can create another game from this room");
+        }
+        if (!match.boardA().isOver() && !match.boardB().isOver()) {
+            throw new IllegalStateException("Finish the current game first");
+        }
+        Set<String> seats = Set.copyOf(match.humanSeatCodes());
+        Side creatorColor = seats.contains("aw") ? Side.WHITE : Side.BLACK;
+        String next = createBughouse(playerId, match.boardA().timeControl(), creatorColor, seats);
+        configureAiLevel(next, aiLevels.getOrDefault(match.roomId(), "medium"));
+        return next;
     }
 
     private static TimeControl timeControl(LiveRoomState state) {

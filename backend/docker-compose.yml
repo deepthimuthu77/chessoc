@@ -43,7 +43,7 @@ services:
       CHESSOC_VALIDATOR_CMD: /opt/vector64/vector64-validator
       CHESSOC_SEARCH_CMD: /opt/vector64/vector64-all
       CHESSOC_VALIDATOR_WORKERS: "2"
-      CHESSOC_SEARCH_WORKERS: "1"
+      CHESSOC_SEARCH_WORKERS: "${CHESSOC_SEARCH_WORKERS:-2}"
       CHESSOC_DB_URL: jdbc:postgresql://postgres:5432/chessoc
       CHESSOC_DB_USER: chessoc
       CHESSOC_DB_PASSWORD: chessoc

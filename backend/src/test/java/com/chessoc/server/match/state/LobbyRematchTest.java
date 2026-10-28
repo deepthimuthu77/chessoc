@@ -38,9 +38,10 @@ class LobbyRematchTest {
         validator.applyByPly.add(ApplyResult.legal(Fen.parse(AFTER_E4), Terminal.NONE,
                 false, Side.BLACK, Optional.empty()));
         DelayScheduler scheduler = new DelayScheduler();
+        List<Runnable> aiJobs = new ArrayList<>();
         AtomicInteger ids = new AtomicInteger();
         MatchService matches = new MatchService(validator, new InMemoryMatchRepository(), scheduler,
-                () -> 1_000L, () -> "cap-" + ids.incrementAndGet());
+                () -> 1_000L, () -> "cap-" + ids.incrementAndGet(), aiJobs::add);
         Lobby lobby = new Lobby(matches, new RatingService(new InMemoryRatingRepository()),
                 new InMemoryGamesRepository(), (variant, fen, budget) -> new SearchResult(
                         Uci.of("e2e4"), new Score.Cp(0), List.of(), 1, Optional.empty()),
@@ -66,6 +67,8 @@ class LobbyRematchTest {
         assertThat(second.blackId()).isEqualTo("alice");
 
         scheduler.run(400);
+        assertThat(aiJobs).hasSize(1);
+        aiJobs.remove(0).run();
         assertThat(second.currentSnapshot().moves()).containsExactly(Uci.of("e2e4"));
     }
 

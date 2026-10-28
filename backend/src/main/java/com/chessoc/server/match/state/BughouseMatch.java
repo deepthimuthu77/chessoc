@@ -61,6 +61,7 @@ public final class BughouseMatch {
     }
 
     private final String roomId;
+    private final ReentrantLock matchLock = new ReentrantLock();
     private final MatchGame boardA;
     private final MatchGame boardB;
     private final Map<String, Slot> slots = new LinkedHashMap<>();
@@ -95,7 +96,6 @@ public final class BughouseMatch {
         this.roomId = roomId;
         this.completion = completion;
         this.botMover = botMover;
-        ReentrantLock matchLock = new ReentrantLock();
         boardA = matches.createHeld(new GameSpec(roomId + "-a", Variant.BUGHOUSE, start,
                 null, null, timeControl, false), matchLock);
         boardB = matches.createHeld(new GameSpec(roomId + "-b", Variant.BUGHOUSE, start,
@@ -121,7 +121,6 @@ public final class BughouseMatch {
                 .filter(board -> board.gameId().endsWith("-a")).findFirst().orElseThrow();
         LiveRoomState.BoardState b = state.boards().stream()
                 .filter(board -> board.gameId().endsWith("-b")).findFirst().orElseThrow();
-        ReentrantLock matchLock = new ReentrantLock();
         boardA = matches.restoreHeld(spec(a, timeControl, state.rated()), matchLock, a, state.savedAtEpochMs());
         boardB = matches.restoreHeld(spec(b, timeControl, state.rated()), matchLock, b, state.savedAtEpochMs());
         wireBoards();
@@ -137,39 +136,44 @@ public final class BughouseMatch {
         return new BughouseMatch(state, matches, timeControl, botMover, completion);
     }
 
-    public synchronized Seat join(String playerId) {
+    public Seat join(String playerId) {
         return join(playerId, null);
     }
 
-    public synchronized Seat join(String playerId, String requestedSeat) {
-        Slot existing = slots.get(playerId);
-        if (existing != null) {
-            return seat(existing);
+    public Seat join(String playerId, String requestedSeat) {
+        matchLock.lock();
+        try {
+            Slot existing = slots.get(playerId);
+            if (existing != null) {
+                return seat(existing);
+            }
+            boolean exactSeat = requestedSeat != null && !requestedSeat.isBlank();
+            SeatPosition position = exactSeat ? SeatPosition.fromCode(requestedSeat) : null;
+            if (exactSeat && !humanSeats.contains(position)) {
+                throw new IllegalArgumentException("seat " + position.code + " is configured for AI");
+            }
+            if (exactSeat && seatOccupied(position)) {
+                throw new IllegalArgumentException("seat " + position.code + " is already occupied");
+            }
+            if (humanIds.size() >= humanTarget) {
+                return spectatorSeat();
+            }
+            if (!exactSeat) {
+                position = firstAvailableHumanSeat();
+            }
+            if (!humanSeats.contains(position)) {
+                throw new IllegalArgumentException("seat " + position.code + " is configured for AI");
+            }
+            if (seatOccupied(position)) {
+                throw new IllegalArgumentException("seat " + position.code + " is already occupied");
+            }
+            claimAt(playerId, position, false);
+            humanIds.add(playerId);
+            startIfReady();
+            return seat(slots.get(playerId));
+        } finally {
+            matchLock.unlock();
         }
-        boolean exactSeat = requestedSeat != null && !requestedSeat.isBlank();
-        SeatPosition position = exactSeat ? SeatPosition.fromCode(requestedSeat) : null;
-        if (exactSeat && !humanSeats.contains(position)) {
-            throw new IllegalArgumentException("seat " + position.code + " is configured for AI");
-        }
-        if (exactSeat && seatOccupied(position)) {
-            throw new IllegalArgumentException("seat " + position.code + " is already occupied");
-        }
-        if (humanIds.size() >= humanTarget) {
-            return spectatorSeat();
-        }
-        if (!exactSeat) {
-            position = firstAvailableHumanSeat();
-        }
-        if (!humanSeats.contains(position)) {
-            throw new IllegalArgumentException("seat " + position.code + " is configured for AI");
-        }
-        if (seatOccupied(position)) {
-            throw new IllegalArgumentException("seat " + position.code + " is already occupied");
-        }
-        claimAt(playerId, position, false);
-        humanIds.add(playerId);
-        startIfReady();
-        return seat(slots.get(playerId));
     }
 
     public void onStateChange(Runnable listener) {
@@ -183,10 +187,15 @@ public final class BughouseMatch {
     }
 
     public LiveRoomState recoveryState(long now) {
-        TimeControl tc = boardA.timeControl();
-        return new LiveRoomState(roomId, "bughouse", tc.baseMs(), tc.incrementMs(),
-                tc.delayType().name(), tc.delayMs(), false, humanTarget, humanSeatCodes(), now,
-                List.of(boardA.recoveryState(), boardB.recoveryState()));
+        matchLock.lock();
+        try {
+            TimeControl tc = boardA.timeControl();
+            return new LiveRoomState(roomId, "bughouse", tc.baseMs(), tc.incrementMs(),
+                    tc.delayType().name(), tc.delayMs(), false, humanTarget, humanSeatCodes(), now,
+                    List.of(boardA.recoveryState(), boardB.recoveryState()));
+        } finally {
+            matchLock.unlock();
+        }
     }
 
     public String roomId() {
@@ -201,30 +210,50 @@ public final class BughouseMatch {
         return boardB;
     }
 
-    public synchronized int seatsFilled() {
-        return slots.size();
+    public int seatsFilled() {
+        matchLock.lock();
+        try {
+            return slots.size();
+        } finally {
+            matchLock.unlock();
+        }
     }
 
-    public synchronized int humansJoined() {
-        return humanIds.size();
+    public int humansJoined() {
+        matchLock.lock();
+        try {
+            return humanIds.size();
+        } finally {
+            matchLock.unlock();
+        }
     }
 
     public int humanTarget() {
         return humanTarget;
     }
 
-    public synchronized List<String> humanSeatCodes() {
+    public List<String> humanSeatCodes() {
         return humanSeats.stream().sorted(Comparator.comparingInt(Enum::ordinal))
                 .map(SeatPosition::code).toList();
     }
 
-    public synchronized List<String> availableHumanSeatCodes() {
-        return humanSeats.stream().filter(seat -> !seatOccupied(seat))
-                .sorted(Comparator.comparingInt(Enum::ordinal)).map(SeatPosition::code).toList();
+    public List<String> availableHumanSeatCodes() {
+        matchLock.lock();
+        try {
+            return humanSeats.stream().filter(seat -> !seatOccupied(seat))
+                    .sorted(Comparator.comparingInt(Enum::ordinal)).map(SeatPosition::code).toList();
+        } finally {
+            matchLock.unlock();
+        }
     }
 
-    public synchronized boolean isParticipant(String playerId) {
-        return slots.containsKey(playerId);
+    public boolean isParticipant(String playerId) {
+        matchLock.lock();
+        try {
+            return slots.containsKey(playerId);
+        } finally {
+            matchLock.unlock();
+        }
     }
 
     public boolean containsGame(String gameId) {
@@ -310,18 +339,23 @@ public final class BughouseMatch {
                 humanSeatCodes(), availableHumanSeatCodes());
     }
 
-    private synchronized void complete(MatchGame source, MatchGame partner, GameResult result) {
-        if (ended) {
-            return;
+    private void complete(MatchGame source, MatchGame partner, GameResult result) {
+        matchLock.lock();
+        try {
+            if (ended) {
+                return;
+            }
+            ended = true;
+            GameResult partnerResult = result.type() == GameResult.ResultType.WIN
+                    ? new GameResult(GameResult.ResultType.WIN,
+                            Optional.of(result.winner().orElseThrow().opponent()), "partner_" + result.reason())
+                    : new GameResult(result.type(), Optional.empty(), "partner_" + result.reason());
+            partner.finishFromPartner(partnerResult);
+            completion.accept(source, result);
+            completion.accept(partner, partnerResult);
+        } finally {
+            matchLock.unlock();
         }
-        ended = true;
-        GameResult partnerResult = result.type() == GameResult.ResultType.WIN
-                ? new GameResult(GameResult.ResultType.WIN,
-                        Optional.of(result.winner().orElseThrow().opponent()), "partner_" + result.reason())
-                : new GameResult(result.type(), Optional.empty(), "partner_" + result.reason());
-        partner.finishFromPartner(partnerResult);
-        completion.accept(source, result);
-        completion.accept(partner, partnerResult);
     }
 
     private static GameSpec spec(LiveRoomState.BoardState board, TimeControl timeControl, boolean rated) {
@@ -350,6 +384,6 @@ public final class BughouseMatch {
         if (required != null && !seats.contains(required)) {
             throw new IllegalArgumentException("creator seat must be human");
         }
-        return seats;
+        return Set.copyOf(seats);
     }
 }

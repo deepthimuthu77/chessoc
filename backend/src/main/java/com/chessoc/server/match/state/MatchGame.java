@@ -26,6 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -47,12 +50,13 @@ public final class MatchGame {
     private final Scheduler scheduler;
     private final LongSupplier clock;
     private final Supplier<String> ids;
+    private final Executor aiExecutor;
 
     private final String gameId;
     private final Variant variant;
     private final Fen initialFen;
-    private String whiteId;
-    private String blackId;
+    private volatile String whiteId;
+    private volatile String blackId;
 
     private final ReentrantLock lock;
     private final List<Uci> moves = new ArrayList<>();
@@ -75,10 +79,13 @@ public final class MatchGame {
     private Fen currentFen;
     private long version;
     private long turnStartMs;
-    private GameResult result;
+    private volatile GameResult result;
     private boolean inCheck;
     private String pendingDrawOfferBy;
     private Scheduler.Cancellable flagTimer;
+    private long flagGeneration;
+    // Covers the delay, queue wait, search, validation and commit; protected by the game lock.
+    private AiJob pendingAi;
     private boolean startHeld;
     private boolean started;
     private boolean recoverySuspended;
@@ -98,11 +105,20 @@ public final class MatchGame {
               Scheduler scheduler, LongSupplier clock, Supplier<String> ids,
               ReentrantLock lock, boolean startHeld, LiveRoomState.BoardState recovered,
               long savedAtEpochMs) {
+        this(spec, engine, repository, scheduler, clock, ids, lock, startHeld, recovered,
+                savedAtEpochMs, SystemScheduler.sharedAiExecutor());
+    }
+
+    MatchGame(GameSpec spec, ValidatorClient engine, MatchRepository repository,
+              Scheduler scheduler, LongSupplier clock, Supplier<String> ids,
+              ReentrantLock lock, boolean startHeld, LiveRoomState.BoardState recovered,
+              long savedAtEpochMs, Executor aiExecutor) {
         this.engine = engine;
         this.repository = repository;
         this.scheduler = scheduler;
         this.clock = clock;
         this.ids = ids;
+        this.aiExecutor = aiExecutor;
         this.lock = lock;
         this.startHeld = startHeld;
         this.gameId = spec.gameId();
@@ -327,6 +343,7 @@ public final class MatchGame {
             reissueAllCaps();
             broadcastAll();
             stateChanged();
+            maybeScheduleAi();
         } finally {
             lock.unlock();
         }
@@ -338,6 +355,7 @@ public final class MatchGame {
             if (result != null) {
                 return;
             }
+            freezeRunningClock();
             endGame(partnerResult);
             reissueAllCaps();
             broadcastAll();
@@ -367,6 +385,23 @@ public final class MatchGame {
         } finally {
             lock.unlock();
         }
+    }
+
+    public java.util.Set<String> viewerIds() {
+        lock.lock();
+        try { return java.util.Set.copyOf(subscribers.keySet()); }
+        finally { lock.unlock(); }
+    }
+
+    public void unsubscribe(String playerId, OutboundSink sink) {
+        lock.lock();
+        try {
+            Subscriber current = subscribers.get(playerId);
+            if (current != null && current.sink() == sink) {
+                subscribers.remove(playerId);
+                currentCaps.values().removeIf(cap -> cap.sessionId().equals(current.session().sessionId()));
+            }
+        } finally { lock.unlock(); }
     }
 
     public void resync(String playerId, long lastKnownVersion) {
@@ -507,32 +542,104 @@ public final class MatchGame {
     }
 
     private void maybeScheduleAi() {
-        if (!recoverySuspended && started && result == null && aiMovers.containsKey(sideToMove())) {
-            scheduler.schedule(this::playAi, AI_MOVE_DELAY_MS);
+        if (pendingAi == null && aiEligible() && !aiExecutorStopped()) {
+            AiJob job = new AiJob();
+            pendingAi = job;
+            job.timer = scheduler.schedule(() -> dispatchAi(job), AI_MOVE_DELAY_MS);
         }
     }
 
-    private void playAi() {
+    private boolean aiEligible() {
+        return !recoverySuspended && started && result == null && aiMovers.containsKey(sideToMove());
+    }
+
+    private boolean aiExecutorStopped() {
+        return aiExecutor instanceof ExecutorService service && service.isShutdown();
+    }
+
+    private void dispatchAi(AiJob job) {
         lock.lock();
         try {
-            Side aiSide = sideToMove();
-            AiMover aiMover = aiMovers.get(aiSide);
-            if (result != null || aiMover == null) {
+            if (pendingAi != job || !aiEligible()) {
+                if (pendingAi == job) {
+                    pendingAi = null;
+                }
                 return;
             }
-            Uci uci = aiMover.bestMove(variant, currentFen);
-            Fen base = variant == Variant.BUGHOUSE ? currentFen : initialFen;
-            List<Uci> history = variant == Variant.BUGHOUSE ? List.of() : moves;
-            ApplyResult applied = engine.apply(variant, base, history, uci);
-            if (!applied.legal()) {
+            job.timer = null;
+            try {
+                aiExecutor.execute(() -> playAi(job));
+            } catch (RejectedExecutionException busy) {
+                pendingAi = null;
+                maybeScheduleAi(); // bounded backoff, including queue saturation
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private static final class AiJob {
+        private Scheduler.Cancellable timer;
+    }
+
+    private record AiPosition(long version, Fen fen, Side side, AiMover mover,
+                              Fen base, List<Uci> history) {}
+
+    private boolean aiPositionCurrent(AiJob job, AiPosition position) {
+        return pendingAi == job && aiEligible() && version == position.version()
+                && currentFen.equals(position.fen()) && sideToMove() == position.side()
+                && aiMovers.get(position.side()) == position.mover();
+    }
+
+    private void playAi(AiJob job) {
+        AiPosition position;
+        lock.lock();
+        try {
+            if (pendingAi != job || !aiEligible()) {
+                if (pendingAi == job) {
+                    pendingAi = null;
+                }
                 return;
             }
-            commitMove(aiSide, uci, applied);
-            broadcastAll();
+            position = new AiPosition(version, currentFen, sideToMove(), aiMovers.get(sideToMove()),
+                    variant == Variant.BUGHOUSE ? currentFen : initialFen,
+                    variant == Variant.BUGHOUSE ? List.of() : List.copyOf(moves));
+        } finally {
+            lock.unlock();
+        }
+        try {
+            // Neither engine search nor AI validation may occupy the game/Bughouse lock.
+            Uci uci = position.mover().bestMove(variant, position.fen());
+            lock.lock();
+            try {
+                if (!aiPositionCurrent(job, position)) {
+                    return;
+                }
+            } finally {
+                lock.unlock();
+            }
+            ApplyResult applied = engine.apply(variant, position.base(), position.history(), uci);
+            lock.lock();
+            try {
+                if (aiPositionCurrent(job, position) && applied.legal()) {
+                    commitMove(position.side(), uci, applied);
+                    broadcastAll();
+                }
+            } finally {
+                lock.unlock();
+            }
         } catch (RuntimeException e) {
             System.err.println("ai move failed for " + gameId + ": " + e);
         } finally {
-            lock.unlock();
+            lock.lock();
+            try {
+                if (pendingAi == job) {
+                    pendingAi = null;
+                    maybeScheduleAi(); // stale position, transient engine failure, or next AI turn
+                }
+            } finally {
+                lock.unlock();
+            }
         }
     }
 
@@ -541,6 +648,7 @@ public final class MatchGame {
         if (side == null) {
             return reject(intent, "not_a_player");
         }
+        freezeRunningClock();
         endGame(new GameResult(GameResult.ResultType.WIN, Optional.of(side.opponent()), "resign"));
         reissueAllCaps();
         broadcastExcept(session.playerId());
@@ -555,6 +663,7 @@ public final class MatchGame {
         if (moves.size() >= 2) {
             return reject(intent, "abort_unavailable");
         }
+        freezeRunningClock();
         endGame(new GameResult(GameResult.ResultType.ABORTED, Optional.empty(), "abort"));
         reissueAllCaps();
         broadcastExcept(session.playerId());
@@ -577,6 +686,7 @@ public final class MatchGame {
             return reject(intent, "no_pending_draw_offer");
         }
         if (Boolean.parseBoolean(cap.params().getOrDefault("accept", "false"))) {
+            freezeRunningClock();
             endGame(new GameResult(GameResult.ResultType.DRAW, Optional.empty(), "agreement"));
         } else {
             pendingDrawOfferBy = null;
@@ -609,6 +719,12 @@ public final class MatchGame {
         result = r;
         pendingDrawOfferBy = null;
         cancelFlag();
+        if (pendingAi != null) {
+            if (pendingAi.timer != null) {
+                pendingAi.timer.cancel();
+            }
+            pendingAi = null; // invalidate any queued/running search
+        }
         if (completionListener != null) {
             try {
                 completionListener.accept(r); // rating/history persistence must not abort completion
@@ -618,6 +734,14 @@ public final class MatchGame {
             }
         }
         stateChanged();
+    }
+
+    private void freezeRunningClock() {
+        if (started && result == null) {
+            Side side = sideToMove();
+            Clock current = clocks.get(side);
+            clocks.put(side, new Clock(Math.max(0, current.remainingMs() - (now() - turnStartMs)), current.control()));
+        }
     }
 
     private void reissueAllCaps() {
@@ -741,21 +865,23 @@ public final class MatchGame {
             return;
         }
         Side side = sideToMove();
-        long atVersion = version;
-        flagTimer = scheduler.schedule(() -> onFlag(side, atVersion), clocks.get(side).remainingMs());
+        long generation = flagGeneration;
+        flagTimer = scheduler.schedule(() -> onFlag(side, generation),
+                clocks.get(side).remainingMs() - Math.max(0, now() - turnStartMs));
     }
 
     private void cancelFlag() {
+        flagGeneration++;
         if (flagTimer != null) {
             flagTimer.cancel();
             flagTimer = null;
         }
     }
 
-    private void onFlag(Side side, long atVersion) {
+    private void onFlag(Side side, long generation) {
         lock.lock();
         try {
-            if (result != null || version != atVersion || sideToMove() != side) {
+            if (result != null || flagGeneration != generation || sideToMove() != side) {
                 return;
             }
             clocks.put(side, new Clock(0, clocks.get(side).control()));

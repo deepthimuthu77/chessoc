@@ -34,6 +34,19 @@ Smoke-test a live move end-to-end (login → game → WSS → engine → persist
 java -cp "build/install/chessoc-server/lib/*" com.chessoc.server.app.SmokeClient
 ```
 
+Exercise simultaneous human and AI matches in all three variants through Caddy:
+
+```bash
+docker compose exec -T server java -cp '/opt/chessoc/lib/*' com.chessoc.server.app.ConcurrentSmokeClient http://caddy/api ws://caddy 4 2 75
+```
+
+This creates nine rooms (12 boards), drives legal human moves over WebSocket, checks persisted
+plies, and measures the public live feed while the real engine searches. The arguments are the
+target plies per board, AI rooms per variant, and timeout in seconds. AI searches use two bounded
+workers by default (`CHESSOC_SEARCH_WORKERS`), with one engine thread per search; clock timers and
+room snapshots remain independent of search work. The Watch page receives shared SSE updates,
+with periodic clock synchronization and a polling fallback.
+
 ### Use the real vector64 binary
 
 The default stack already runs the real Linux engine. To use a separate Windows or local build,

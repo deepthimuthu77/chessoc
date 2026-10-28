@@ -42,6 +42,7 @@ class LobbyRecoveryTest {
                 new ManualScheduler(), () -> 1_000L, () -> "id-" + ids.incrementAndGet());
         Lobby first = lobby(firstMatches, liveRooms);
         String room = first.create("alice", Variant.STANDARD, TimeControl.fischer(300_000, 0), false);
+        first.configureAiLevel(room, "hard");
         first.join(room, "bob");
         MatchGame game = firstMatches.get(room).orElseThrow();
         CapturingSink sink = new CapturingSink();
@@ -57,6 +58,7 @@ class LobbyRecoveryTest {
         MatchGame restoredGame = restoredMatches.get(restoredSeat.gameId()).orElseThrow();
 
         assertThat(restoredSeat.color()).isEqualTo("white");
+        assertThat(liveRooms.loadAll().get(0).aiLevel()).isEqualTo("hard");
         assertThat(restoredGame.currentSnapshot().version()).isEqualTo(1);
         assertThat(restoredGame.currentSnapshot().fen().raw()).isEqualTo(AFTER_E4);
         assertThat(restoredGame.currentSnapshot().blackPlayerId()).isEqualTo("bob");

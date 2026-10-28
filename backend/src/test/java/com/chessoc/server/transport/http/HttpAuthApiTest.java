@@ -160,6 +160,49 @@ class HttpAuthApiTest {
     }
 
     @Test
+    void reviewKeepsVariantInitialPositionAndBothBughouseBoards() throws Exception {
+        String token = post("/login", "{}", null).path("token").asText();
+        String crazyhouse = post("/play/create", "{\"variant\":\"crazyhouse\",\"vsEngine\":true}", token)
+                .path("gameId").asText();
+        JsonNode review = get("/game/moves?id=" + crazyhouse);
+        assertThat(review.path("variant").asText()).isEqualTo("crazyhouse");
+        assertThat(review.path("initialFen").asText()).contains("[] w");
+        String bughouse = post("/play/create", "{\"variant\":\"bughouse\",\"humanPlayers\":1}", token)
+                .path("gameId").asText();
+        JsonNode paired = get("/game/moves?id=" + bughouse);
+        assertThat(paired.path("boards")).hasSize(2);
+        assertThat(paired.path("boards").get(0).path("gameId").asText()).isEqualTo(bughouse + "-a");
+        assertThat(paired.path("boards").get(1).path("gameId").asText()).isEqualTo(bughouse + "-b");
+    }
+
+    @Test
+    void customTimeIsExposedAndInvalidDifficultyIsRejected() throws Exception {
+        String token = post("/login", "{}", null).path("token").asText();
+        String room = post("/play/create", "{\"minutes\":17,\"increment\":9,\"vsEngine\":true,\"aiLevel\":\"easy\"}", token)
+                .path("gameId").asText();
+        JsonNode game = findGame(get("/games/live").path("games"), room);
+        assertThat(game.path("minutes").asInt()).isEqualTo(17);
+        assertThat(game.path("increment").asInt()).isEqualTo(9);
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + api.port() + "/play/create"))
+                .header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"aiLevel\":\"invalid\"}")).build();
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void liveEventsStreamsNamedGameEvents() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + api.port() + "/games/live/events"))
+                .timeout(java.time.Duration.ofSeconds(3)).GET().build();
+        HttpResponse<java.io.InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElse("")).isEqualTo("text/event-stream");
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body()))) {
+            assertThat(reader.readLine()).isEqualTo("event: games");
+            assertThat(reader.readLine()).startsWith("data: {\"games\":");
+        }
+    }
+
+    @Test
     void addsFriendAndListsIt() throws Exception {
         JsonNode alice = post("/auth/register",
                 "{\"username\":\"alice2\",\"email\":\"a2@x.com\",\"password\":\"secret1\"}", null);

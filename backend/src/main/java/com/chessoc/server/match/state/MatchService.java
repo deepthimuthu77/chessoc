@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import java.util.concurrent.locks.ReentrantLock;
@@ -17,6 +18,7 @@ public final class MatchService {
     private final Scheduler scheduler;
     private final LongSupplier clock;
     private final Supplier<String> ids;
+    private final Executor aiExecutor;
     private final Map<String, MatchGame> games = new ConcurrentHashMap<>();
 
     public MatchService(ValidatorClient engine, MatchRepository repository, Scheduler scheduler, LongSupplier clock) {
@@ -25,28 +27,36 @@ public final class MatchService {
 
     public MatchService(ValidatorClient engine, MatchRepository repository, Scheduler scheduler,
                         LongSupplier clock, Supplier<String> ids) {
+        this(engine, repository, scheduler, clock, ids, SystemScheduler.sharedAiExecutor());
+    }
+
+    public MatchService(ValidatorClient engine, MatchRepository repository, Scheduler scheduler,
+                        LongSupplier clock, Supplier<String> ids, Executor aiExecutor) {
         this.engine = engine;
         this.repository = repository;
         this.scheduler = scheduler;
         this.clock = clock;
         this.ids = ids;
+        this.aiExecutor = aiExecutor;
     }
 
     public MatchGame create(GameSpec spec) {
-        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids);
+        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
+                new ReentrantLock(), false, null, 0, aiExecutor);
         games.put(spec.gameId(), game);
         return game;
     }
 
     MatchGame createHeld(GameSpec spec, ReentrantLock matchLock) {
-        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids, matchLock, true);
+        MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
+                matchLock, true, null, 0, aiExecutor);
         games.put(spec.gameId(), game);
         return game;
     }
 
     MatchGame restore(GameSpec spec, LiveRoomState.BoardState state, long savedAtEpochMs) {
         MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
-                new ReentrantLock(), false, state, savedAtEpochMs);
+                new ReentrantLock(), false, state, savedAtEpochMs, aiExecutor);
         games.put(spec.gameId(), game);
         return game;
     }
@@ -54,7 +64,7 @@ public final class MatchService {
     MatchGame restoreHeld(GameSpec spec, ReentrantLock matchLock,
                           LiveRoomState.BoardState state, long savedAtEpochMs) {
         MatchGame game = new MatchGame(spec, engine, repository, scheduler, clock, ids,
-                matchLock, true, state, savedAtEpochMs);
+                matchLock, true, state, savedAtEpochMs, aiExecutor);
         games.put(spec.gameId(), game);
         return game;
     }

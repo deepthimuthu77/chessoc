@@ -42,6 +42,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The product HTTP surface (§5): auth (register / login / guest), live-connection ticket, game
@@ -52,6 +56,16 @@ public final class HttpAuthApi {
     private final HttpServer server;
     private final ApiServices s;
     private final FriendService friendService;
+    private final AtomicInteger liveViewers = new AtomicInteger();
+    private final ScheduledExecutorService liveFeed = Executors.newSingleThreadScheduledExecutor();
+    private volatile String liveJson = "{\"games\":[]}";
+    private String liveSignature = "";
+    private long livePublishedAt;
+    private record CachedName(String name, long expiresAt) {}
+    private final Map<String, CachedName> playerNames = new ConcurrentHashMap<>();
+    private final Map<String, MatchGame> observedGames = new ConcurrentHashMap<>();
+    private final Map<String, Long> endedGames = new ConcurrentHashMap<>();
+    private volatile boolean running = true;
 
     public HttpAuthApi(int port, ApiServices services) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -67,6 +81,7 @@ public final class HttpAuthApi {
         route("/ticket", this::ticket);
         route("/join", this::join);
         route("/play/create", this::playCreate);
+        route("/play/rematch", this::replayRoom);
         route("/seek/cancel", this::seekCancel);
         route("/seek/status", this::seekStatus);
         route("/seek", this::seek);
@@ -82,6 +97,7 @@ public final class HttpAuthApi {
         route("/games/mine", this::gamesMine);
         route("/games/active", this::gamesActive);
         route("/games/live", this::gamesLive);
+        route("/games/live/events", this::liveEvents);
         route("/games/open", this::gamesOpen);
         route("/game/moves", this::gameMoves);
         route("/analyze", this::analyze);
@@ -96,9 +112,26 @@ public final class HttpAuthApi {
 
     public void start() {
         server.start();
+        liveFeed.scheduleWithFixedDelay(() -> {
+            if (liveViewers.get() == 0) return;
+            try {
+                Map<String, Object> payload = liveGamesPayload(true);
+                String signature = feedSignature(payload);
+                long now = System.currentTimeMillis();
+                if (!signature.equals(liveSignature) || now - livePublishedAt >= 5000) {
+                    liveJson = mapper.writeValueAsString(payload);
+                    liveSignature = signature;
+                    livePublishedAt = now;
+                }
+            } catch (RuntimeException | IOException e) {
+                System.err.println("live feed refresh failed: " + e.getMessage());
+            }
+        }, 0, 250, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
+        running = false;
+        liveFeed.shutdownNow();
         server.stop(0);
     }
 
@@ -271,6 +304,14 @@ public final class HttpAuthApi {
         payload.put("variant", seat.variant());
         payload.put("humanSeats", seat.humanSeats());
         payload.put("availableSeats", seat.availableSeats());
+        s.matches().get(seat.gameId()).ifPresent(game -> {
+            payload.put("whiteName", displayName(game.whiteId()));
+            payload.put("blackName", displayName(game.blackId()));
+        });
+        s.matches().get(seat.partnerGameId()).ifPresent(game -> {
+            payload.put("partnerWhiteName", displayName(game.whiteId()));
+            payload.put("partnerBlackName", displayName(game.blackId()));
+        });
         send(x, 200, payload);
     }
 
@@ -280,9 +321,13 @@ public final class HttpAuthApi {
             return;
         }
         JsonNode b = read(x);
+        if (!Set.of("easy", "medium", "hard").contains(b.path("aiLevel").asText("medium"))) {
+            send(x, 400, Map.of("error", "AI level must be easy, medium or hard"));
+            return;
+        }
         Variant variant = Variant.valueOf(b.path("variant").asText("standard").toUpperCase());
-        long baseMs = Math.max(1, b.path("minutes").asInt(5)) * 60_000L;
-        long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
+        long baseMs = Math.max(1, Math.min(180, b.path("minutes").asInt(5))) * 60_000L;
+        long incMs = Math.max(0, Math.min(180, b.path("increment").asInt(0))) * 1_000L;
         TimeControl tc = TimeControl.fischer(baseMs, incMs);
         String gameId;
         if (variant == Variant.BUGHOUSE) {
@@ -307,7 +352,20 @@ public final class HttpAuthApi {
             boolean rated = variant != Variant.BUGHOUSE && b.path("rated").asBoolean(true);
             gameId = s.lobby().create(token.playerId(), variant, tc, rated);
         }
+        s.lobby().configureAiLevel(gameId, b.path("aiLevel").asText("medium"));
         send(x, 200, Map.of("gameId", gameId));
+    }
+
+    private void replayRoom(HttpExchange x) throws IOException {
+        if (notPost(x)) return;
+        SessionToken token = bearer(x);
+        if (token == null) return;
+        try {
+            String gameId = s.lobby().replay(read(x).path("room").asText(), token.playerId());
+            send(x, 200, Map.of("gameId", gameId));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            send(x, 409, Map.of("error", e.getMessage()));
+        }
     }
 
     // ---- quick match ----
@@ -323,8 +381,8 @@ public final class HttpAuthApi {
             send(x, 400, Map.of("error", "use a four-player room for bughouse"));
             return;
         }
-        long baseMs = Math.max(1, b.path("minutes").asInt(5)) * 60_000L;
-        long incMs = Math.max(0, b.path("increment").asInt(0)) * 1_000L;
+        long baseMs = Math.max(1, Math.min(180, b.path("minutes").asInt(5))) * 60_000L;
+        long incMs = Math.max(0, Math.min(180, b.path("increment").asInt(0))) * 1_000L;
         String gameId = s.seeks().seek(token.playerId(), variant, TimeControl.fischer(baseMs, incMs));
         send(x, 200, gameId == null ? Map.of("status", "waiting")
                 : Map.of("status", "matched", "gameId", gameId));
@@ -566,6 +624,34 @@ public final class HttpAuthApi {
             send(x, 400, Map.of("error", "id required"));
             return;
         }
+        String roomId = s.lobby().bughouseRoomId(gameId);
+        if (roomId.equals(gameId) && (gameId.endsWith("-a") || gameId.endsWith("-b"))) {
+            roomId = gameId.substring(0, gameId.length() - 2);
+        }
+        boolean bughouse = s.lobby().isBughouseGame(gameId)
+                || s.games().find(roomId + "-a").map(g -> "bughouse".equals(g.variant())).orElse(false);
+        List<String> ids = bughouse ? List.of(roomId + "-a", roomId + "-b") : List.of(gameId);
+        List<Map<String, Object>> boards = new ArrayList<>();
+        String variant = bughouse ? "bughouse" : s.matches().get(gameId)
+                .map(g -> g.variant().name().toLowerCase())
+                .orElseGet(() -> s.games().find(gameId).map(GameRecord::variant).orElse("standard"));
+        if (!bughouse && s.matches().get(gameId).isEmpty() && s.games().find(gameId).isEmpty()) {
+            send(x, 404, Map.of("error", "Game not found"));
+            return;
+        }
+        for (int index = 0; index < ids.size(); index++) {
+            String id = ids.get(index);
+            String initial = s.matches().get(id).map(g -> g.currentSnapshot().initialFen().raw())
+                    .orElse("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+                            + ("standard".equals(variant) ? "" : "[]") + " w KQkq - 0 1");
+            boards.add(Map.of("gameId", id, "label", bughouse ? index == 0 ? "A" : "B" : "",
+                    "initialFen", initial, "plies", reviewPlies(id)));
+        }
+        send(x, 200, Map.of("gameId", gameId, "roomId", roomId, "variant", variant,
+                "initialFen", boards.get(0).get("initialFen"), "plies", boards.get(0).get("plies"), "boards", boards));
+    }
+
+    private List<Map<String, Object>> reviewPlies(String gameId) {
         List<Map<String, Object>> plies = new ArrayList<>();
         for (PersistedPly p : s.matchRepo().plies(gameId)) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -574,8 +660,7 @@ public final class HttpAuthApi {
             row.put("fen", p.fen().raw());
             plies.add(row);
         }
-        String variant = s.games().find(gameId).map(GameRecord::variant).orElse("standard");
-        send(x, 200, Map.of("gameId", gameId, "variant", variant, "plies", plies));
+        return plies;
     }
 
     private void analyze(HttpExchange x) throws IOException {
@@ -602,8 +687,77 @@ public final class HttpAuthApi {
     }
 
     private void gamesLive(HttpExchange x) throws IOException {
+        send(x, 200, liveGamesPayload());
+    }
+
+    private void liveEvents(HttpExchange x) throws IOException {
+        if (!"GET".equals(x.getRequestMethod())) {
+            send(x, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        if (liveViewers.incrementAndGet() > 64) {
+            liveViewers.decrementAndGet();
+            send(x, 503, Map.of("error", "Live feed is busy; retry shortly"));
+            return;
+        }
+        if (liveViewers.get() == 1) liveJson = mapper.writeValueAsString(liveGamesPayload(true));
+        x.getResponseHeaders().set("Content-Type", "text/event-stream");
+        x.getResponseHeaders().set("Cache-Control", "no-cache, no-transform");
+        x.sendResponseHeaders(200, 0);
+        try (OutputStream output = x.getResponseBody()) {
+            String sent = null;
+            while (running) {
+                String latest = liveJson;
+                if (sent != latest) {
+                    output.write(("event: games\ndata: " + latest + "\n\n").getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                    sent = latest;
+                }
+                try { Thread.sleep(250); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        } catch (IOException ignored) {
+            // Browser closed its stream.
+        } finally {
+            liveViewers.decrementAndGet();
+            x.close();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String feedSignature(Map<String, Object> payload) {
+        StringBuilder key = new StringBuilder();
+        for (Map<String, Object> game : (List<Map<String, Object>>) payload.get("games")) {
+            key.append(game.get("gameId")).append(':').append(game.get("spectators"))
+                    .append(game.get("live")).append(game.get("result"));
+            for (Map<String, Object> board : (List<Map<String, Object>>) game.get("boards")) {
+                key.append(board.get("white")).append(board.get("black"))
+                        .append(board.get("fen")).append(board.get("moveCount"));
+            }
+        }
+        return key.toString();
+    }
+
+    private Map<String, Object> liveGamesPayload() {
+        return liveGamesPayload(false);
+    }
+
+    private Map<String, Object> liveGamesPayload(boolean includeEnded) {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (MatchGame g : s.matches().liveGames()) {
+        List<MatchGame> candidates = new ArrayList<>(s.matches().liveGames());
+        long now = System.currentTimeMillis();
+        for (MatchGame game : candidates) observedGames.put(game.gameId(), game);
+        for (Map.Entry<String, MatchGame> entry : observedGames.entrySet()) {
+            if (!entry.getValue().isOver()) continue;
+            long at = endedGames.computeIfAbsent(entry.getKey(), id -> now);
+            if (now - at > 60000 || endedGames.size() > 64) {
+                observedGames.remove(entry.getKey());
+                endedGames.remove(entry.getKey());
+            } else if (includeEnded) candidates.add(entry.getValue());
+        }
+        for (MatchGame g : candidates) {
             if (g.variant() == Variant.BUGHOUSE && !s.lobby().isPrimaryBughouseBoard(g.gameId())) {
                 continue;
             }
@@ -621,16 +775,31 @@ public final class HttpAuthApi {
             row.put("minutes", (int) (g.timeControl().baseMs() / 60_000));
             row.put("increment", (int) (g.timeControl().incrementMs() / 1_000));
             row.put("rated", g.rated());
-            row.put("spectators", boards.stream().mapToInt(MatchGame::spectatorCount).max().orElse(0));
-            row.put("moveCount", boards.stream().mapToInt(board -> board.currentSnapshot().moves().size()).sum());
+            GameSnapshot primary = g.currentSnapshot();
+            row.put("live", primary.result().isEmpty());
+            primary.result().ifPresent(result -> {
+                row.put("result", result.reason());
+                row.put("winner", result.winner().map(side -> side == Side.WHITE
+                        ? displayName(g.whiteId()) : displayName(g.blackId())).orElse(""));
+            });
+            Set<String> players = new java.util.HashSet<>();
+            Set<String> viewers = new java.util.HashSet<>();
+            for (MatchGame board : boards) {
+                players.add(board.whiteId());
+                players.add(board.blackId());
+                viewers.addAll(board.viewerIds());
+            }
+            viewers.removeAll(players);
+            row.put("spectators", viewers.size());
             List<Map<String, Object>> boardRows = new ArrayList<>();
             for (int index = 0; index < boards.size(); index++) {
                 boardRows.add(liveBoard(boards.get(index), boards.size() == 1 ? "" : index == 0 ? "A" : "B"));
             }
             row.put("boards", boardRows);
+            row.put("moveCount", boardRows.stream().mapToInt(board -> (int) board.get("moveCount")).sum());
             out.add(row);
         }
-        send(x, 200, Map.of("games", out));
+        return Map.of("games", out);
     }
 
     private Map<String, Object> liveBoard(MatchGame game, String label) {
@@ -731,7 +900,14 @@ public final class HttpAuthApi {
         if (id.startsWith(Lobby.ENGINE_ID)) {
             return "Computer";
         }
-        return s.accounts().findById(id).map(Account::username).orElse("guest");
+        if (id.startsWith("guest-")) return "Guest " + id.substring(6, Math.min(12, id.length()));
+        long now = System.currentTimeMillis();
+        CachedName cached = playerNames.get(id);
+        if (cached != null && cached.expiresAt() > now) return cached.name();
+        String name = s.accounts().findById(id).map(Account::username).orElse("Guest");
+        if (playerNames.size() > 10000) playerNames.clear();
+        playerNames.put(id, new CachedName(name, now + 30000));
+        return name;
     }
 
     // ---- plumbing ----

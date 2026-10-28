@@ -58,13 +58,15 @@ public final class WebSocketLiveServer extends WebSocketServer {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        live.remove(conn);
+        LiveConnection connection = live.remove(conn);
+        if (connection != null) connection.onClose();
     }
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
         if (conn != null) {
-            live.remove(conn);
+            LiveConnection connection = live.remove(conn);
+            if (connection != null) connection.onClose();
         }
     }
 

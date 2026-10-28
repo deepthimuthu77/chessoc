@@ -14,7 +14,15 @@ public record LiveRoomState(
         int humanTarget,
         List<String> humanSeats,
         long savedAtEpochMs,
-        List<BoardState> boards) {
+        List<BoardState> boards,
+        String aiLevel) {
+
+    public LiveRoomState(String roomId, String variant, long baseMs, long incrementMs, String delayType,
+                         long delayMs, boolean rated, int humanTarget, List<String> humanSeats,
+                         long savedAtEpochMs, List<BoardState> boards) {
+        this(roomId, variant, baseMs, incrementMs, delayType, delayMs, rated, humanTarget, humanSeats,
+                savedAtEpochMs, boards, "medium");
+    }
 
     public record BoardState(
             String gameId,

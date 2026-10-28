@@ -43,6 +43,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import java.util.function.LongSupplier;
 
 /** Assembles the module graph and owns the process lifecycle. */
@@ -50,6 +53,7 @@ public final class ServerApp {
 
     private final EngineAdapter engine;
     private final ScheduledExecutorService schedulerExecutor;
+    private final ThreadPoolExecutor aiExecutor;
     private final HttpAuthApi http;
     private final WebSocketLiveServer ws;
     private final Db db;
@@ -57,6 +61,7 @@ public final class ServerApp {
     public ServerApp(ServerConfig config, EngineAdapter engine) throws IOException {
         this.engine = engine;
         this.schedulerExecutor = Executors.newScheduledThreadPool(2);
+        this.aiExecutor = SystemScheduler.newAiExecutor(config.searchWorkers());
         Scheduler scheduler = new SystemScheduler(schedulerExecutor);
         LongSupplier clock = System::currentTimeMillis;
 
@@ -74,7 +79,8 @@ public final class ServerApp {
         FriendRepository friends = useDb ? new PostgresFriendRepository(db) : new InMemoryFriendRepository();
         GamesRepository games = useDb ? new PostgresGamesRepository(db) : new InMemoryGamesRepository();
 
-        MatchService matches = new MatchService(engine, matchRepo, scheduler, clock);
+        MatchService matches = new MatchService(engine, matchRepo, scheduler, clock,
+                () -> UUID.randomUUID().toString(), aiExecutor);
         RatingService ratingService = new RatingService(ratings, clock);
         LeaderboardService leaderboard = new LeaderboardService(ratings, accounts);
         AccountService accountService = new AccountService(accounts);
@@ -112,8 +118,10 @@ public final class ServerApp {
     public void stop() throws InterruptedException {
         ws.stop();
         http.stop();
+        aiExecutor.shutdownNow();
         schedulerExecutor.shutdownNow();
         engine.shutdown();
+        aiExecutor.awaitTermination(2, TimeUnit.SECONDS);
         if (db != null) {
             db.close();
         }

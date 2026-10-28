@@ -69,6 +69,7 @@ public final class PooledEngineAdapter implements EngineAdapter {
     @Override
     public SearchResult bestMove(Variant variant, Fen position, SearchBudget budget) {
         String payload = setup(variant) + "\n"
+                + "setoption name Threads value 1\n"
                 + "setoption name SearchJson value true\n"
                 + validatorProtocol.position(position, List.of()) + "\n"
                 + searchProtocol.go(budget);

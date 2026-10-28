@@ -81,4 +81,8 @@ public final class LiveConnection implements OutboundSink {
     public void send(String type, Object payload) {
         connection.send(codec.encode(type, payload));
     }
+
+    public void onClose() {
+        game.unsubscribe(session.playerId(), this);
+    }
 }

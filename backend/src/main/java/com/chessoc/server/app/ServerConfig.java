@@ -27,6 +27,12 @@ public record ServerConfig(
         String dbUser,
         String dbPassword) {
 
+    public ServerConfig {
+        if (validatorWorkers < 1 || searchWorkers < 1) {
+            throw new IllegalArgumentException("engine worker counts must be positive");
+        }
+    }
+
     public static ServerConfig defaults() {
         return new ServerConfig(
                 8080, 8081,
@@ -35,7 +41,7 @@ public record ServerConfig(
                 Duration.ofSeconds(30).toMillis(),
                 "", 0,
                 List.of(), List.of(),
-                8, 2,
+                Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 1)), 1,
                 Duration.ofSeconds(2), Duration.ofSeconds(30),
                 "", "", "");
     }

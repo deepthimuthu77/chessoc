@@ -90,6 +90,38 @@ class MatchGameTest {
     }
 
     @Test
+    void disconnectRemovesViewerButDoesNotRemoveItsReplacementConnection() {
+        MatchGame game = newGame(foolsMateEngine(), new InMemoryMatchRepository(), new ManualScheduler());
+        Session viewer = new Session("viewer-session", "viewer", "old-connection");
+        CapturingSink oldSink = new CapturingSink();
+        CapturingSink replacement = new CapturingSink();
+        game.subscribe(viewer, oldSink);
+        assertThat(game.spectatorCount()).isEqualTo(1);
+        game.subscribe(new Session("viewer-session", "viewer", "new-connection"), replacement);
+        game.unsubscribe("viewer", oldSink);
+        assertThat(game.viewerIds()).contains("viewer");
+        game.unsubscribe("viewer", replacement);
+        assertThat(game.spectatorCount()).isZero();
+        assertThat(game.viewerIds()).doesNotContain("viewer");
+    }
+
+    @Test
+    void finalClockKeepsElapsedThinkingTimeWhenGameIsAborted() {
+        java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1000);
+        MatchService service = new MatchService(foolsMateEngine(), new InMemoryMatchRepository(),
+                new ManualScheduler(), now::get);
+        MatchGame game = service.create(new GameSpec("clock-game", Variant.STANDARD, Fen.parse(INIT),
+                "pW", "pB", TimeControl.fischer(180000, 2000), false));
+        game.subscribe(white, wSink);
+        now.addAndGet(4000);
+        Capability abort = wSink.capability(CapabilityKind.ABORT).orElseThrow();
+        game.submit(white, new Messages.Intent("abort", abort.id(), Map.of(), now.get()));
+        assertThat(game.currentSnapshot().clockSample().whiteRemainingMs()).isEqualTo(176000);
+        now.addAndGet(5000);
+        assertThat(game.currentSnapshot().clockSample().whiteRemainingMs()).isEqualTo(176000);
+    }
+
+    @Test
     void doesNotAdvanceProjectionOnUnknownCapability() {
         ScriptedEngine engine = foolsMateEngine();
         MatchGame game = newGame(engine, new InMemoryMatchRepository(), new ManualScheduler());
