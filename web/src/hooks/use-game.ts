@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api, type JoinResult } from '@/lib/api';
-import { getAuth } from '@/lib/auth';
+import { getAuth, setAuth } from '@/lib/auth';
 import { getSettings } from '@/lib/settings';
 import { playMoveSound } from '@/lib/sound';
 import { Capability, MessageType, type Color } from '@/lib/protocol';
@@ -71,8 +71,32 @@ export function useGame(room: string, preferredSeat?: string | null) {
     (async () => {
       try {
         setJoinError(null);
-        const token = getAuth()?.token ?? (await api.guest()).token;
-        const seat = await api.join(room, token, preferredSeat ?? undefined);
+        const storedSession = getAuth();
+        let token: string;
+        if (storedSession) {
+          token = storedSession.token;
+        } else {
+          const guestSession = await api.guest();
+          setAuth(guestSession);
+          token = guestSession.token;
+        }
+
+        let seat: JoinResult;
+        try {
+          seat = await api.join(room, token, preferredSeat ?? undefined);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : '';
+          const staleGuest = storedSession?.account.id.startsWith('guest-')
+            && ['token expired', 'malformed token', 'bad signature', 'malformed payload', 'bad token encoding']
+              .includes(message);
+          if (!staleGuest) {
+            throw error;
+          }
+          const guestSession = await api.guest();
+          setAuth(guestSession);
+          token = guestSession.token;
+          seat = await api.join(room, token, preferredSeat ?? undefined);
+        }
         if (cancelled) return;
         setSeat(seat);
         setColor(seat.color);

@@ -96,12 +96,33 @@ export interface Profile {
   pools: PoolRating[];
 }
 
+export interface LiveBoard {
+  gameId: string;
+  label: string;
+  white: string;
+  black: string;
+  fen: string;
+  sideToMove: 'white' | 'black';
+  moveCount: number;
+  lastMove: string;
+  whiteRemainingMs: number;
+  blackRemainingMs: number;
+  serverTimestamp: number;
+  inCheck: boolean;
+}
+
 export interface LiveGame {
   gameId: string;
   white: string;
   black: string;
   variant: string;
+  speed: 'bullet' | 'blitz' | 'rapid' | 'classical';
+  minutes: number;
+  increment: number;
+  rated: boolean;
   spectators: number;
+  moveCount: number;
+  boards: LiveBoard[];
 }
 
 export interface OpenGame {
