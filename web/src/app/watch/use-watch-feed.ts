@@ -55,7 +55,8 @@ export function useWatchFeed() {
     let streamDeadline: ReturnType<typeof setTimeout> | undefined;
     let streamFailures = 0;
     let failures = 0;
-    let polling = typeof window.EventSource !== 'function';
+    let polling = typeof window.EventSource !== 'function'
+      || window.location.hostname.endsWith('.trycloudflare.com');
     const previousGames = new Map<string, { json: string; game: WatchGame }>();
     const previousBoards = new Map<string, { json: string; board: WatchBoard }>();
 
