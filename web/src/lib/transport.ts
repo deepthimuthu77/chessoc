@@ -8,6 +8,8 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'cl
 const CONFIGURED_WS_BASE = process.env.NEXT_PUBLIC_WS_BASE;
 const PING_INTERVAL_MS = 20_000;
 const MAX_BACKOFF_MS = 30_000;
+const CONNECT_TIMEOUT_MS = 15_000;
+const IDLE_TIMEOUT_MS = 45_000;
 
 export interface TransportOptions {
   gameId: string;
@@ -24,6 +26,8 @@ export class LiveTransport {
   private attempt = 0;
   private ping?: ReturnType<typeof setInterval>;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private connectTimer?: ReturnType<typeof setTimeout>;
+  private lastInboundAt = 0;
 
   constructor(private readonly opts: TransportOptions) {}
 
@@ -40,6 +44,7 @@ export class LiveTransport {
   close(): void {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.connectTimer) clearTimeout(this.connectTimer);
     this.stopPing();
     this.socket?.close();
     this.opts.onStatus('closed');
@@ -52,8 +57,12 @@ export class LiveTransport {
     const wsBase = CONFIGURED_WS_BASE || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
     const socket = new WebSocket(`${wsBase}/game?${query}`);
     this.socket = socket;
+    this.connectTimer = setTimeout(() => socket.close(), CONNECT_TIMEOUT_MS);
 
     socket.onopen = () => {
+      if (this.closed || this.socket !== socket) { socket.close(); return; }
+      if (this.connectTimer) clearTimeout(this.connectTimer);
+      this.lastInboundAt = Date.now();
       this.attempt = 0;
       this.opts.onStatus('connected');
       this.startPing();
@@ -66,6 +75,8 @@ export class LiveTransport {
     };
 
     socket.onmessage = (event) => {
+      if (this.closed || this.socket !== socket) return;
+      this.lastInboundAt = Date.now();
       let env: Envelope;
       try {
         env = decode(event.data as string);
@@ -82,6 +93,8 @@ export class LiveTransport {
     socket.onerror = () => socket.close();
 
     socket.onclose = () => {
+      if (this.socket !== socket) return;
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       this.stopPing();
       if (this.closed) {
         this.opts.onStatus('closed');
@@ -110,7 +123,13 @@ export class LiveTransport {
 
   private startPing(): void {
     this.stopPing();
-    this.ping = setInterval(() => this.send(MessageType.Ping, {}), PING_INTERVAL_MS);
+    this.ping = setInterval(() => {
+      if (Date.now() - this.lastInboundAt > IDLE_TIMEOUT_MS) {
+        this.socket?.close();
+      } else {
+        this.send(MessageType.Ping, {});
+      }
+    }, PING_INTERVAL_MS);
   }
 
   private stopPing(): void {

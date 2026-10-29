@@ -6,6 +6,8 @@ import ts from 'typescript';
 
 function harness(freshTicket) {
   const timers = [];
+  const intervals = [];
+  let now = 0;
   const sockets = [];
   class Socket {
     static OPEN = 1;
@@ -18,9 +20,10 @@ function harness(freshTicket) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
     module: testModule, exports: testModule.exports, process: { env: {} }, WebSocket: Socket,
+    Date: { now: () => now },
     window: { location: { protocol: 'http:', host: 'localhost' } },
     setTimeout: callback => { timers.push(callback); return timers.length; }, clearTimeout() {},
-    setInterval() {}, clearInterval() {},
+    setInterval: callback => { intervals.push(callback); return intervals.length; }, clearInterval() {},
     require: () => ({ MessageType: {}, encode: () => '', decode: () => ({}) }),
   });
   const transport = new testModule.exports.LiveTransport({
@@ -28,14 +31,14 @@ function harness(freshTicket) {
     onEnvelope() {}, onStatus() {},
   });
   transport.start();
-  return { transport, sockets, timers };
+  return { transport, sockets, timers, intervals, advance: ms => { now += ms; } };
 }
 
 test('leaving a room while a reconnect ticket is loading never opens another socket', async () => {
   let resolve;
   const h = harness(() => new Promise(done => { resolve = done; }));
   h.sockets[0].onclose();
-  const reconnect = h.timers[0]();
+  const reconnect = h.timers.at(-1)();
   h.transport.close();
   resolve('late-ticket');
   await reconnect;
@@ -46,9 +49,23 @@ test('a failed reconnect request after leaving does not schedule more retries', 
   let reject;
   const h = harness(() => new Promise((_, fail) => { reject = fail; }));
   h.sockets[0].onclose();
-  const reconnect = h.timers[0]();
+  const reconnect = h.timers.at(-1)();
   h.transport.close();
   reject(new Error('offline'));
   await reconnect;
-  assert.equal(h.timers.length, 1);
+  assert.equal(h.timers.length, 2);
+});
+
+test('a stalled handshake closes and schedules a fresh-ticket reconnect', () => {
+  const h = harness(async () => 'next');
+  h.timers[0]();
+  assert.equal(h.timers.length, 2);
+});
+
+test('an apparently open connection with no inbound traffic reconnects', () => {
+  const h = harness(async () => 'next');
+  h.sockets[0].onopen();
+  h.advance(60_000);
+  h.intervals[0]();
+  assert.equal(h.timers.length, 2);
 });

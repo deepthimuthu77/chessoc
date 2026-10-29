@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api, ApiError, type JoinResult } from '@/lib/api';
-import { expireAuth, getAuth, setAuth } from '@/lib/auth';
+import { expireAuth, getAuth, getLoginPath, setAuth } from '@/lib/auth';
 import { getSettings } from '@/lib/settings';
 import { playMoveSound } from '@/lib/sound';
 import { Capability, MessageType, type Color } from '@/lib/protocol';
@@ -87,10 +87,24 @@ export function useGame(room: string, preferredSeat?: string | null) {
         const { ticket } = await api.ticket(token);
         if (cancelled) return;
 
+        const freshTicket = async () => {
+          try {
+            return (await api.ticket(token)).ticket;
+          } catch (error) {
+            if (!cancelled && error instanceof ApiError && error.status === 401) {
+              expireAuth(token);
+              transport?.close();
+              partnerTransport?.close();
+              window.location.assign(getLoginPath(`${window.location.pathname}${window.location.search}`, true));
+            }
+            throw error;
+          }
+        };
+
         transport = new LiveTransport({
           gameId: seat.gameId,
           ticket,
-          freshTicket: async () => (await api.ticket(token)).ticket,
+          freshTicket,
           lastVersion: () => versionRef.current,
           onEnvelope: (env) => {
             if (env.payload && typeof env.payload === 'object' && 'snapshot' in env.payload && env.payload.snapshot) {
@@ -114,7 +128,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
           partnerTransport = new LiveTransport({
             gameId: seat.partnerGameId,
             ticket: partnerTicket.ticket,
-            freshTicket: async () => (await api.ticket(token)).ticket,
+            freshTicket,
             lastVersion: () => partnerVersionRef.current,
             onEnvelope: (env) => {
               if (env.payload && typeof env.payload === 'object' && 'snapshot' in env.payload && env.payload.snapshot) {
