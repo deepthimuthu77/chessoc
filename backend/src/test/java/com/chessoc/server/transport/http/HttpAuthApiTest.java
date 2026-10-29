@@ -130,6 +130,39 @@ class HttpAuthApiTest {
     }
 
     @Test
+    void changedPasswordRejectsOldCredentialsAndDeletedAccountRejectsOldToken() throws Exception {
+        String token = post("/auth/register",
+                "{\"username\":\"accountqa\",\"email\":\"qa@x.com\",\"password\":\"secret1\"}", null)
+                .path("token").asText();
+        post("/account/password", "{\"oldPassword\":\"secret1\",\"newPassword\":\"secret2\"}", token);
+        HttpResponse<String> oldLogin = client.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + api.port() + "/auth/login"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"email\":\"qa@x.com\",\"password\":\"secret1\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(oldLogin.statusCode()).isEqualTo(401);
+        post("/auth/login", "{\"email\":\"qa@x.com\",\"password\":\"secret2\"}", null);
+        post("/account/delete", "{\"password\":\"secret2\"}", token);
+        for (String endpoint : new String[]{"/me", "/ticket"}) {
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + api.port() + endpoint))
+                    .header("Authorization", "Bearer " + token);
+            if (endpoint.equals("/ticket")) request.POST(HttpRequest.BodyPublishers.ofString("{}"));
+            assertThat(client.send(request.build(), HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        }
+    }
+
+    @Test
+    void deletingAnAccountCannotOrphanAnActiveSeat() throws Exception {
+        String token = post("/auth/register",
+                "{\"username\":\"activeqa\",\"email\":\"active@x.com\",\"password\":\"secret1\"}", null)
+                .path("token").asText();
+        post("/play/create", "{}", token);
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + api.port() + "/account/delete"))
+                .header("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"password\":\"secret1\"}")).build();
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(409);
+    }
+
+    @Test
     void registerLoginJoinAndCreate() throws Exception {
         JsonNode alice = post("/auth/register",
                 "{\"username\":\"alice\",\"email\":\"alice@x.com\",\"password\":\"secret1\"}", null);

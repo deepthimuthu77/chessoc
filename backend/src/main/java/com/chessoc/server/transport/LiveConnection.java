@@ -57,9 +57,21 @@ public final class LiveConnection implements OutboundSink {
             return;
         }
 
+        try {
+            route(envelope);
+        } catch (ProtocolException | IllegalArgumentException e) {
+            send(MessageType.ERROR, new Messages.Error("bad_message", e.getMessage()));
+        }
+    }
+
+    private void route(Envelope envelope) {
         switch (envelope.type()) {
             case MessageType.INTENT -> {
                 Messages.Intent intent = codec.payload(envelope, Messages.Intent.class);
+                if (intent.intentId() == null || intent.intentId().isBlank()
+                        || intent.capabilityId() == null || intent.capabilityId().isBlank()) {
+                    throw new ProtocolException("intentId and capabilityId required");
+                }
                 if (intentLimiter.allow(session.sessionId(), clock.getAsLong())) {
                     game.submit(session, intent);
                 } else {

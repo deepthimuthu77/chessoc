@@ -89,6 +89,27 @@ class LiveConnectionTest {
     }
 
     @Test
+    void malformedPayloadsReturnErrorsAndTheConnectionStillAnswersPing() {
+        ScriptedValidator engine = new ScriptedValidator();
+        engine.legal.add(List.of(Uci.of("e2e4")));
+        Scheduler noop = (task, delay) -> () -> {};
+        MatchService service = new MatchService(engine, new InMemoryMatchRepository(), noop, () -> 0L);
+        MatchGame game = service.create(new GameSpec("g", Variant.STANDARD, Fen.parse(INIT),
+                "white", "black", TimeControl.fischer(300_000, 0), false));
+        CapturingConnection conn = new CapturingConnection();
+        LiveConnection live = new LiveConnection(new Session("s", "white", "c"), conn, codec, game);
+        for (String frame : List.of("null", "", "[]", "{\"v\":[1,0],\"type\":\"intent\",\"payload\":[]}",
+                "{\"v\":[1,0],\"type\":\"intent\",\"payload\":{}}")) {
+            live.onMessage(frame);
+            assertThat(lastEnvelope(conn, MessageType.ERROR)).isNotNull();
+        }
+        live.onMessage(codec.encode(MessageType.PING, new Messages.Ping()));
+        assertThat(lastEnvelope(conn, MessageType.PONG)).isNotNull();
+        assertThat(codec.payload(lastEnvelope(conn, MessageType.SNAPSHOT), Messages.Snapshot.class)
+                .snapshot().version()).isZero();
+    }
+
+    @Test
     void routesAnIntentAndBroadcastsOverTheWire() {
         ScriptedValidator engine = new ScriptedValidator();
         engine.legal.add(List.of(Uci.of("e2e4")));

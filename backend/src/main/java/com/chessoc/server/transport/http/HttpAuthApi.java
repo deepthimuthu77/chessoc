@@ -897,6 +897,10 @@ public final class HttpAuthApi {
         if (token == null) {
             return;
         }
+        if (!s.matches().activeFor(token.playerId()).isEmpty()) {
+            send(x, 409, Map.of("error", "Finish your active games before deleting your account"));
+            return;
+        }
         try {
             s.accountService().deleteAccount(token.playerId(), read(x).path("password").asText());
             send(x, 200, Map.of("ok", true));
@@ -969,6 +973,10 @@ public final class HttpAuthApi {
         }
         try {
             SessionToken token = s.tokens().verify(auth.substring(7), s.clock().getAsLong());
+            if (!token.playerId().startsWith("guest-") && s.accounts().findById(token.playerId()).isEmpty()) {
+                send(x, 401, Map.of("error", "account no longer exists"));
+                return null;
+            }
             s.sessions().register(token.sessionId(), token.playerId());
             return token;
         } catch (AuthException e) {

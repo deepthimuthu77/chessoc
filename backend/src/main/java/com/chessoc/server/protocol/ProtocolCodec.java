@@ -46,6 +46,7 @@ public final class ProtocolCodec {
         } catch (JsonProcessingException e) {
             throw new ProtocolException("malformed envelope JSON", e);
         }
+        if (root == null || !root.isObject()) throw new ProtocolException("expected an envelope object");
         JsonNode v = root.get("v");
         if (v == null || !v.isArray() || v.size() != 2) {
             throw new ProtocolException("missing or malformed protocol version");
@@ -63,6 +64,7 @@ public final class ProtocolCodec {
 
     public <T> T payload(Envelope envelope, Class<T> type) {
         JsonNode node = envelope.payload() == null ? mapper.createObjectNode() : envelope.payload();
+        if (!node.isObject()) throw new ProtocolException("expected a payload object");
         try {
             return mapper.treeToValue(node, type);
         } catch (JsonProcessingException e) {
