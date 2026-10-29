@@ -20,3 +20,6 @@ venv/
 # env
 .env*
 !.env.example
+
+# Local demo secret and tunnel URL
+.demo/

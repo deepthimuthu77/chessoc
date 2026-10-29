@@ -47,7 +47,7 @@ services:
       CHESSOC_DB_URL: jdbc:postgresql://postgres:5432/chessoc
       CHESSOC_DB_USER: chessoc
       CHESSOC_DB_PASSWORD: chessoc
-      CHESSOC_TOKEN_SECRET: dev-secret-change-me
+      CHESSOC_TOKEN_SECRET: "${CHESSOC_TOKEN_SECRET:-dev-secret-change-me}"
     ports:
       - "${CHESSOC_HTTP_HOST_PORT:-8080}:8080"
       - "8081:8081"
@@ -79,6 +79,14 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+
+  tunnel:
+    profiles: [public]
+    image: cloudflare/cloudflared:latest
+    command: [tunnel, --no-autoupdate, --url, 'http://caddy:80']
+    depends_on:
+      - caddy
+    restart: unless-stopped
 
 volumes:
   pgdata:
