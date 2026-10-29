@@ -20,4 +20,8 @@ public final class SessionRegistry {
     public void remove(String sessionId) {
         playerBySession.remove(sessionId);
     }
+
+    public boolean hasPlayer(String playerId) {
+        return playerBySession.containsValue(playerId);
+    }
 }

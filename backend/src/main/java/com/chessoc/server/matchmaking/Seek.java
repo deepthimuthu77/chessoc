@@ -9,9 +9,9 @@ public record Seek(String playerId, Variant variant, TimeControl timeControl) {
 
     /** Pairing bucket: same variant and speed only. */
     public Bucket bucket() {
-        return new Bucket(variant, timeControl.bucket());
+        return new Bucket(variant, timeControl);
     }
 
-    public record Bucket(Variant variant, SpeedBucket speed) {
+    public record Bucket(Variant variant, TimeControl timeControl) {
     }
 }

@@ -194,6 +194,11 @@ public final class HttpAuthApi {
             return;
         }
         String guestId = token.playerId();
+        s.seeks().cancel(guestId);
+        if (!s.matches().activeFor(guestId).isEmpty()) {
+            send(x, 409, Map.of("error", "Finish your active games before upgrading so you keep access to your seats"));
+            return;
+        }
         if (s.accounts().findById(guestId).isPresent()) {
             send(x, 400, Map.of("error", "already a registered account"));
             return;
@@ -403,8 +408,9 @@ public final class HttpAuthApi {
         if (token == null) {
             return;
         }
-        s.seeks().cancel(token.playerId());
-        send(x, 200, Map.of("ok", true));
+        String matched = s.seeks().cancel(token.playerId());
+        send(x, 200, matched == null ? Map.of("ok", true)
+                : Map.of("ok", true, "status", "matched", "gameId", matched));
     }
 
     // ---- social ----
@@ -521,6 +527,12 @@ public final class HttpAuthApi {
         Map<String, String> q = query(x);
         Account a = (q.containsKey("id") ? s.accounts().findById(q.get("id"))
                 : s.accounts().findByUsername(q.getOrDefault("username", ""))).orElse(null);
+        String id = q.getOrDefault("id", "");
+        if (a == null && id.matches("guest-[0-9a-f]{8}")
+                && (s.sessions().hasPlayer(id) || !s.games().forAccount(id, 1).isEmpty()
+                || !s.matches().activeFor(id).isEmpty())) {
+            a = new Account(id, displayName(id), "", "", 0);
+        }
         if (a == null) {
             send(x, 404, Map.of("error", "no such player"));
             return;
@@ -924,7 +936,28 @@ public final class HttpAuthApi {
                 exchange.close();
                 return;
             }
-            handler.handle(exchange);
+            if (!exchange.getRequestURI().getPath().equals(path)) {
+                send(exchange, 404, Map.of("error", "endpoint not found"));
+                return;
+            }
+            String method = exchange.getRequestMethod();
+            boolean mutation = Set.of("/login", "/auth/register", "/auth/login", "/auth/upgrade",
+                    "/heartbeat", "/ticket", "/join", "/play/create", "/play/rematch", "/seek",
+                    "/seek/cancel", "/friends/add", "/friends/accept", "/friends/decline",
+                    "/account/password", "/account/delete").contains(path);
+            if (!(mutation ? "POST" : "GET").equals(method)) {
+                exchange.getResponseHeaders().set("Allow", mutation ? "POST" : "GET");
+                send(exchange, 405, Map.of("error", "method not allowed"));
+                return;
+            }
+            try {
+                handler.handle(exchange);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException | IllegalArgumentException e) {
+                send(exchange, 400, Map.of("error", "Invalid request. Check the submitted values."));
+            } catch (RuntimeException e) {
+                System.err.println("API request failed for " + path + ": " + e.getMessage());
+                send(exchange, 503, Map.of("error", "Service temporarily unavailable. Please retry."));
+            }
         });
     }
 
@@ -954,7 +987,9 @@ public final class HttpAuthApi {
 
     private JsonNode read(HttpExchange x) throws IOException {
         byte[] body = x.getRequestBody().readAllBytes();
-        return body.length == 0 ? mapper.createObjectNode() : mapper.readTree(body);
+        JsonNode value = body.length == 0 ? mapper.createObjectNode() : mapper.readTree(body);
+        if (value == null || !value.isObject()) throw new IllegalArgumentException("Expected a JSON object");
+        return value;
     }
 
     private Map<String, String> query(HttpExchange x) {

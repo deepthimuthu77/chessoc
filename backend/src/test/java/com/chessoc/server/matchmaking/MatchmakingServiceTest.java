@@ -28,6 +28,24 @@ class MatchmakingServiceTest {
     }
 
     @Test
+    void sameSpeedWithDifferentTimeControlsDoesNotPair() {
+        MatchmakingService mm = service();
+        mm.enqueue(new Seek("p1", Variant.STANDARD, blitz));
+        assertThat(mm.enqueue(new Seek("p2", Variant.STANDARD, TimeControl.fischer(180_000, 2_000)))).isEmpty();
+    }
+
+    @Test
+    void pairingSurvivesRetriesAndCancellationReturnsAlreadyMatchedGame() {
+        SeekCoordinator coordinator = new SeekCoordinator(service(), (w, b, v, tc, rated) -> "paired-game");
+        assertThat(coordinator.seek("p1", Variant.STANDARD, blitz)).isNull();
+        assertThat(coordinator.seek("p2", Variant.STANDARD, blitz)).isEqualTo("paired-game");
+        assertThat(coordinator.poll("p1")).isEqualTo("paired-game");
+        assertThat(coordinator.poll("p1")).isEqualTo("paired-game");
+        assertThat(coordinator.cancel("p1")).isEqualTo("paired-game");
+        assertThat(coordinator.poll("p1")).isNull();
+    }
+
+    @Test
     void doesNotPairAcrossBuckets() {
         MatchmakingService mm = service();
         mm.enqueue(new Seek("p1", Variant.STANDARD, TimeControl.fischer(60_000, 0))); // bullet

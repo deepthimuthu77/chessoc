@@ -26,7 +26,9 @@ public final class SeekCoordinator {
     }
 
     /** Enqueue a seek; returns the game id if it paired immediately, else null (now waiting). */
-    public String seek(String playerId, Variant variant, TimeControl timeControl) {
+    public synchronized String seek(String playerId, Variant variant, TimeControl timeControl) {
+        resolved.remove(playerId);
+        matchmaking.cancel(playerId);
         return matchmaking.enqueue(new Seek(playerId, variant, timeControl))
                 .map(p -> {
                     String gameId = games.create(p.whiteId(), p.blackId(), p.variant(), p.timeControl(), p.rated());
@@ -37,13 +39,13 @@ public final class SeekCoordinator {
                 .orElse(null);
     }
 
-    /** A waiting player's poll: the game id once paired (consumed once), else null. */
-    public String poll(String playerId) {
-        return resolved.remove(playerId);
+    /** Keep the pairing available if a poll response is lost. A new seek clears it. */
+    public synchronized String poll(String playerId) {
+        return resolved.get(playerId);
     }
 
-    public void cancel(String playerId) {
+    public synchronized String cancel(String playerId) {
         matchmaking.cancel(playerId);
-        resolved.remove(playerId);
+        return resolved.remove(playerId);
     }
 }

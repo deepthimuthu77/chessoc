@@ -92,6 +92,44 @@ class HttpAuthApiTest {
     }
 
     @Test
+    void invalidRequestsHaveJsonErrorsInsteadOfDroppedConnections() throws Exception {
+        String token = post("/login", "{}", null).path("token").asText();
+        for (String body : new String[] {"{", "{\"variant\":\"unknown\"}"}) {
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + api.port() + "/play/create"))
+                    .header("Authorization", "Bearer " + token)
+                    .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(mapper.readTree(response.body()).path("error").asText()).isNotBlank();
+        }
+        HttpResponse<String> wrongMethod = client.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + api.port() + "/play/create"))
+                .header("Authorization", "Bearer " + token).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(wrongMethod.statusCode()).isEqualTo(405);
+    }
+
+    @Test
+    void guestUpgradeDoesNotOrphanAnActiveSeat() throws Exception {
+        String token = post("/login", "{}", null).path("token").asText();
+        post("/play/create", "{}", token);
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + api.port() + "/auth/upgrade"))
+                .header("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"upgrade\",\"email\":\"u@x.com\",\"password\":\"secret1\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void newGuestHasAProfileBeforePlayingAnyGames() throws Exception {
+        JsonNode guest = post("/login", "{}", null);
+        String id = guest.path("account").path("id").asText();
+        JsonNode profile = get("/profile?id=" + id);
+        assertThat(profile.path("account").path("id").asText()).isEqualTo(id);
+        assertThat(profile.path("stats").path("wins").asInt()).isZero();
+    }
+
+    @Test
     void registerLoginJoinAndCreate() throws Exception {
         JsonNode alice = post("/auth/register",
                 "{\"username\":\"alice\",\"email\":\"alice@x.com\",\"password\":\"secret1\"}", null);
