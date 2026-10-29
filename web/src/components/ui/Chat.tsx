@@ -10,7 +10,7 @@ const COLOR: Record<string, string> = {
   spectator: 'text-blue-400',
 };
 
-export function Chat({ messages, onSend }: { messages: ChatMessage[]; onSend: (text: string) => void }) {
+export function Chat({ messages, onSend, disabled = false }: { messages: ChatMessage[]; onSend: (text: string) => void; disabled?: boolean }) {
   const [text, setText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -22,7 +22,7 @@ export function Chat({ messages, onSend }: { messages: ChatMessage[]; onSend: (t
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (text.trim()) {
+    if (!disabled && text.trim()) {
       onSend(text);
       setText('');
     }
@@ -47,9 +47,12 @@ export function Chat({ messages, onSend }: { messages: ChatMessage[]; onSend: (t
       </div>
       <form onSubmit={submit} className="border-t border-zinc-800 p-2">
         <input
+          aria-label="Chat message"
+          disabled={disabled}
+          maxLength={500}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Message…"
+          placeholder={disabled ? 'Reconnect to send messages' : 'Message…'}
           className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-blue-500"
         />
       </form>

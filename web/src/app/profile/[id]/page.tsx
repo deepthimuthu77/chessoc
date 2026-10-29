@@ -97,7 +97,7 @@ function ProfileContent({ id }: { id: string }) {
               </div>
             </div>
 
-            {token && !isSelf && (
+            {token && !isSelf && !id.startsWith('guest-') && (
               <button
                 type="button"
                 disabled={adding || !!friendNote}

@@ -241,7 +241,7 @@ export const api = {
   seek: (opts: SeekOptions, token: string) =>
     request<SeekResult>('/seek', 'POST', opts, token),
   seekStatus: (token: string) => request<SeekResult>('/seek/status', 'GET', undefined, token),
-  seekCancel: (token: string) => request<{ ok: boolean }>('/seek/cancel', 'POST', {}, token),
+  seekCancel: (token: string) => request<{ ok: boolean; status?: 'matched'; gameId?: string }>('/seek/cancel', 'POST', {}, token),
 
   addFriend: (username: string, token: string) =>
     request<{ ok: boolean; status: string }>('/friends/add', 'POST', { username }, token),

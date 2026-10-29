@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -45,16 +45,24 @@ export default function HomePage() {
   const [active, setActive] = useState<ActiveGame[]>([]);
   const [open, setOpen] = useState<OpenGame[]>([]);
   const [searching, setSearching] = useState(false);
+  const seekPending = useRef(false);
+  const [startingSearch, setStartingSearch] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
   const [aiLevel, setAiLevel] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [customMinutes, setCustomMinutes] = useState('5');
   const [customIncrement, setCustomIncrement] = useState('0');
   const [listError, setListError] = useState<string | null>(null);
+  const [activeError, setActiveError] = useState<string | null>(null);
   const [listRetry, setListRetry] = useState(0);
 
   useEffect(() => {
+    let stopped = false;
     if (token) {
-      api.gamesActive(token).then((r) => setActive(r.games)).catch((error) => setListError(error.message));
+      api.gamesActive(token).then((r) => { if (!stopped) { setActive(r.games); setActiveError(null); } })
+        .catch((error) => { if (!stopped) setActiveError(error.message); });
     }
+    return () => { stopped = true; };
   }, [token, listRetry]);
 
   useEffect(() => {
@@ -79,14 +87,24 @@ export default function HomePage() {
     if (!searching || !token) {
       return;
     }
-    const poll = setInterval(async () => {
-      const r = await api.seekStatus(token).catch(() => null);
-      if (r?.status === 'matched' && r.gameId) {
-        clearInterval(poll);
-        router.push(`/room/${r.gameId}`);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const r = await api.seekStatus(token);
+        if (stopped) return;
+        setCreateError(null);
+        if (r.status === 'matched' && r.gameId) {
+          router.push(`/room/${r.gameId}`);
+          return;
+        }
+      } catch {
+        if (!stopped) setCreateError('Match search connection interrupted. Retrying; cancel to leave the queue.');
       }
-    }, 1500);
-    return () => clearInterval(poll);
+      if (!stopped) timer = setTimeout(poll, 1500);
+    };
+    timer = setTimeout(poll, 1500);
+    return () => { stopped = true; clearTimeout(timer); };
   }, [searching, token, router]);
 
   if (!ready || !account || !token) {
@@ -115,6 +133,9 @@ export default function HomePage() {
   }
 
   async function quickMatch() {
+    if (seekPending.current || searching) return;
+    seekPending.current = true;
+    setStartingSearch(true);
     setCreateError(null);
     setSearching(true);
     const r = await api.seek({ variant, minutes: tc.minutes, increment: tc.increment }, token!).catch((error) => { setCreateError(error.message); return null; });
@@ -123,11 +144,34 @@ export default function HomePage() {
     } else if (!r) {
       setSearching(false);
     }
+    seekPending.current = false;
+    setStartingSearch(false);
   }
 
   async function cancelSearch() {
-    setSearching(false);
-    await api.seekCancel(token!).catch((error) => setCreateError(error.message));
+    if (seekPending.current) return;
+    seekPending.current = true;
+    setCanceling(true);
+    try {
+      const result = await api.seekCancel(token!);
+      if (result.gameId) router.push(`/room/${result.gameId}`);
+      else setSearching(false);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Could not cancel. Please retry.');
+    } finally { seekPending.current = false; setCanceling(false); }
+  }
+
+  function joinRoom() {
+    try {
+      const value = room.trim();
+      const url = new URL(value.startsWith('/') || /^https?:\/\//i.test(value) ? value : `/room/${value}`, window.location.origin);
+      const match = url.pathname.match(/^\/room\/([^/]+)\/?$/);
+      if (!match || !/^[a-zA-Z0-9_-]+$/.test(match[1])) throw new Error('Enter a room ID or a full room invite link.');
+      const seat = url.searchParams.get('seat');
+      router.push(`/room/${match[1]}${seat ? `?seat=${encodeURIComponent(seat)}` : ''}`);
+    } catch {
+      setRoomError('Enter a valid room ID or a full room invite link.');
+    }
   }
 
   function chooseVariant(next: string) {
@@ -204,7 +248,7 @@ export default function HomePage() {
           </section>
         )}
 
-        {listError && <p role="alert" className="text-sm text-amber-300">Game lists unavailable: {listError} <button type="button" className="underline" onClick={() => { setListError(null); setListRetry((value) => value + 1); }}>Retry</button></p>}
+        {(listError || activeError) && <p role="alert" className="text-sm text-amber-300">Game lists unavailable: {activeError || listError} <button type="button" className="underline" onClick={() => { setListError(null); setActiveError(null); setListRetry((value) => value + 1); }}>Retry</button></p>}
 
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
           <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Time control</h2>
@@ -283,9 +327,10 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={cancelSearch}
+                disabled={canceling || startingSearch}
                 className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800"
               >
-                Cancel
+                {canceling ? 'Canceling…' : 'Cancel'}
               </button>
             </div>
           ) : (
@@ -515,12 +560,13 @@ export default function HomePage() {
             <button
               type="button"
               disabled={!room.trim()}
-              onClick={() => router.push(`/room/${room.trim()}`)}
+              onClick={joinRoom}
               className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-50"
             >
               Join
             </button>
           </div>
+          {roomError && <p role="alert" className="mt-2 text-sm text-rose-400">{roomError}</p>}
         </section>
       </div>
     </main>

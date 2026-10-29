@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
@@ -13,6 +13,7 @@ export default function UpgradePage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
 
   if (!ready || !account) {
     return <main className="min-h-screen bg-slate-950" />;
@@ -20,15 +21,17 @@ export default function UpgradePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending.current || !isGuest) return;
+    pending.current = true;
     setError(null);
     setBusy(true);
     try {
-      await upgrade(username, email, password);
+      await upgrade(username.trim(), email.trim(), password);
       router.push('/');
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
-    }
+    } finally { pending.current = false; }
   }
 
   return (
@@ -45,6 +48,7 @@ export default function UpgradePage() {
 
         <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <input
+            aria-label="Username" required minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" autoComplete="username" disabled={busy || !isGuest}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
@@ -52,6 +56,7 @@ export default function UpgradePage() {
           />
           <input
             type="email"
+            aria-label="Email" required autoComplete="email" disabled={busy || !isGuest}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
@@ -59,12 +64,13 @@ export default function UpgradePage() {
           />
           <input
             type="password"
+            aria-label="Password" required minLength={6} autoComplete="new-password" disabled={busy || !isGuest}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
           />
-          {error && <p className="text-sm font-medium text-rose-400">{error}</p>}
+          {error && <p role="alert" className="text-sm font-medium text-rose-400">{error}</p>}
           <button
             type="submit"
             disabled={busy || !isGuest}

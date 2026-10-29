@@ -19,9 +19,14 @@ const NO_DROP_TARGETS: string[] = [];
 
 export default function RoomPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const game = useGame(params.id, searchParams.get('seat'));
+  return <Room key={`${params.id}:${searchParams.get('seat') ?? ''}`} roomId={params.id} preferredSeat={searchParams.get('seat')} />;
+}
+
+function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string | null }) {
+  const params = { id: roomId };
+  const router = useRouter();
+  const game = useGame(roomId, preferredSeat);
   const [selectedDrop, setSelectedDrop] = useState<string | null>(null);
   const [dismissedRoom, setDismissedRoom] = useState<string | null>(null);
 
@@ -89,7 +94,7 @@ export default function RoomPage() {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
-          {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} />}
+          {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />}
         </div>
 
         <div className="order-1 relative flex w-full max-w-2xl flex-col items-center xl:order-2">
@@ -279,7 +284,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
-          <Chat messages={game.chat} onSend={game.sendChat} />
+          <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />
         </aside>
       </div>
 

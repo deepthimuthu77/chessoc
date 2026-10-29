@@ -46,6 +46,7 @@ export class LiveTransport {
   }
 
   private open(ticket: string, isReconnect: boolean): void {
+    if (this.closed) return;
     this.opts.onStatus(isReconnect ? 'reconnecting' : 'connecting');
     const query = `ticket=${encodeURIComponent(ticket)}&gameId=${encodeURIComponent(this.opts.gameId)}`;
     const wsBase = CONFIGURED_WS_BASE || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
@@ -99,9 +100,10 @@ export class LiveTransport {
       if (this.closed) return;
       try {
         const ticket = await this.opts.freshTicket();
+        if (this.closed) return;
         this.open(ticket, true);
       } catch {
-        this.scheduleReconnect();
+        if (!this.closed) this.scheduleReconnect();
       }
     }, delay);
   }
