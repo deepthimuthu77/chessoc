@@ -1,6 +1,7 @@
 param(
     [switch]$NoBuild,
     [switch]$LocalOnly,
+    [switch]$NoWatch,
     [ValidateRange(30, 900)][int]$TimeoutSeconds = 180
 )
 
@@ -9,6 +10,7 @@ $composeRoot = Join-Path $PSScriptRoot 'backend'
 $composeArgs = @('compose', '--project-directory', $composeRoot, '-f', (Join-Path $composeRoot 'docker-compose.yml'))
 $stackStarted = $false
 $demoRoot = Join-Path $PSScriptRoot '.demo'
+. (Join-Path $PSScriptRoot 'demo-network.ps1')
 
 function Wait-Ready([string]$Label, [scriptblock]$Check) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -81,19 +83,8 @@ try {
 
     Write-Host ''
     Write-Host 'Chessoc is ready: http://localhost/' -ForegroundColor Green
-    $lanAddresses = @(
-        foreach ($adapter in [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
-            if ($adapter.OperationalStatus -ne 'Up') { continue }
-            $properties = $adapter.GetIPProperties()
-            if ($properties.GatewayAddresses.Count -eq 0) { continue }
-            foreach ($address in $properties.UnicastAddresses) {
-                $ip = $address.Address
-                if ($ip.AddressFamily -eq 'InterNetwork' -and -not [Net.IPAddress]::IsLoopback($ip) -and
-                    -not $ip.ToString().StartsWith('169.254.')) { $ip.ToString() }
-            }
-        }
-    ) | Sort-Object -Unique
-    foreach ($ip in $lanAddresses) { Write-Host "Same Wi-Fi/LAN: http://$ip/" -ForegroundColor Cyan }
+    $lanAddresses = @(Get-DemoLanUrls)
+    foreach ($url in $lanAddresses) { Write-Host "Same Wi-Fi/LAN: $url" -ForegroundColor Cyan }
     if (-not $lanAddresses) { Write-Host 'No LAN address detected. Connect to Wi-Fi or Ethernet to share locally.' }
 
     if (-not $LocalOnly) {
@@ -124,6 +115,7 @@ try {
         Write-Host 'Keep Docker running. This temporary URL changes if the tunnel restarts.'
     }
     Write-Host "STOP COMMAND: & `"$(Join-Path $PSScriptRoot 'stop-demo.cmd')`"" -ForegroundColor Yellow
+    if (-not $NoWatch) { & (Join-Path $PSScriptRoot 'watch-demo.ps1') -LocalOnly:$LocalOnly }
     exit 0
 } catch {
     Write-Host "Startup failed: $($_.Exception.Message)" -ForegroundColor Red

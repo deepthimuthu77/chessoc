@@ -53,6 +53,22 @@ Stop the demo without deleting its data:
 The start script prints this exact stop command. Stopping also disables the public tunnel;
 the next start prints the new HTTPS address. Docker Desktop itself stays running.
 
+Leave the startup terminal open to see updated LAN addresses after switching Wi-Fi or Ethernet.
+It also detects a restarted tunnel and prints/saves its new public URL. Current addresses are saved
+in `.demo/addresses.json`; the public link is in `.demo/public-url.txt`. Ctrl+C ends monitoring while
+the Docker stack keeps running. Use the printed stop command to stop the app.
+
+For a startup command that returns immediately, use `start-demo.cmd -NoWatch`.
+To monitor an already running stack separately:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\Soumik\Java\chessoc\watch-demo.ps1"
+```
+
+Switching networks usually reconnects the existing public tunnel. If the hostname changes after
+a tunnel restart, share the newly printed link; a browser on the old unreachable hostname cannot
+discover a replacement URL automatically without a stable domain.
+
 Devices on the same network can use the printed `http://<LAN-IP>/` address. The public Cloudflare
 HTTPS URL has a trusted certificate and needs no manual certificate installation. Direct IP-only
 HTTPS uses Caddy's local CA; see [backend setup](backend/README.md) for certificate details.
