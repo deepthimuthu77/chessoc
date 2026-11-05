@@ -100,6 +100,7 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
         <div className="order-1 relative flex w-full max-w-2xl flex-col items-center xl:order-2">
           <Board
             pieces={game.pieces}
+            pendingMove={game.pendingMove}
             legalMoves={game.legalMoves}
             lastMove={game.lastMove}
             checkSquare={game.checkSquare}
@@ -114,7 +115,7 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
             onPremove={game.setPremove}
           />
           {!game.connected && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
               <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-8 py-6 text-center shadow-2xl">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Game unavailable</p>
                 <h1 className="mt-2 text-2xl font-bold text-white">
@@ -124,6 +125,7 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
                   {game.error ?? 'The board remains read-only until an authenticated server projection arrives.'}
                 </p>
                 {game.error?.includes('session expired') && <Link href={`/login?reason=session-expired&next=${encodeURIComponent(`/room/${params.id}`)}`} className="mt-4 inline-block text-blue-400 underline">Sign in to return to this room</Link>}
+                <Link href="/" className="mt-4 block font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
               </div>
             </div>
           )}
@@ -133,6 +135,7 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
             result={game.result}
             onRematch={game.canRematch ? game.rematch : undefined}
             rematchPending={game.rematchPending}
+            error={game.error ?? (game.status !== 'connected' ? 'Connection lost. Return to the dashboard to start another game.' : undefined)}
             onDismiss={() => setDismissedRoom(params.id)}
             reviewHref={`/review/${encodeURIComponent(game.reviewId)}`}
             isSpectator={game.isSpectator}
@@ -226,6 +229,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
           <div className="relative mx-auto mt-2 max-w-[720px]">
             <Board
               pieces={game.pieces}
+              pendingMove={game.pendingMove}
               legalMoves={game.legalMoves}
               lastMove={game.lastMove}
               checkSquare={game.checkSquare}
@@ -264,6 +268,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
               orientation={game.partner.orientation}
             />
             {!game.partner.connected ? <UnavailableBoard /> : !game.result && !ready && <WaitingOverlay joined={game.humansJoined} target={game.humanTarget} />}
+            {game.partner.connected && !game.result && ready && <ConnectionOverlay status={game.partner.status} />}
           </div>
           <div className="mt-2"><Hand pieces={partnerBottomHand} /></div>
           <BoardLabel title={`${game.partner.orientation === 'white' ? 'White' : 'Black'} · Team ${game.partner.orientation === 'white' ? blackTeam : whiteTeam}`} subtitle={playerName(game.partner.orientation, true)} clock={roomClock(game, game.partner.orientation, true)} active={!game.isSpectator} />
@@ -302,7 +307,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
 function RoomNavigation({ spectator }: { spectator: boolean }) {
   return <nav aria-label="Room navigation" className="flex flex-wrap gap-5 text-sm font-semibold text-blue-300">
     {spectator && <Link href="/watch" className="hover:underline">← Back to Watch</Link>}
-    <Link href="/" className="hover:underline">Back to lobby</Link>
+    <Link href="/" className="hover:underline">Go to dashboard</Link>
   </nav>;
 }
 
@@ -320,8 +325,9 @@ function FinishedGame({ reviewId, onShowResult }: { reviewId: string; onShowResu
 }
 
 function UnavailableBoard({ error }: { error?: string | null }) {
-  return <div role="status" className="absolute inset-0 flex items-center justify-center bg-slate-950/75 p-6 text-center text-sm text-zinc-300">
-    {error ?? 'Connecting to board…'}
+  return <div role="status" className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-slate-950/75 p-6 text-center text-sm text-zinc-300">
+    <p>{error ?? 'Connecting to board…'}</p>
+    <Link href="/" className="font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
   </div>;
 }
 
@@ -400,10 +406,11 @@ function BoardLabel({
 
 function WaitingOverlay({ joined, target }: { joined: number; target: number }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm">
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm">
       <div className="border border-zinc-700 bg-zinc-950 px-6 py-4 text-center shadow-2xl">
         <p className="text-sm font-bold text-white">Waiting for players</p>
         <p className="mt-1 text-xs text-zinc-400">{joined}/{target} human seats filled</p>
+        <Link href="/" className="mt-4 inline-block text-sm font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
       </div>
     </div>
   );

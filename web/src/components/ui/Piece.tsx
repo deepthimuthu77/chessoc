@@ -42,7 +42,7 @@ export const Piece = React.memo(function Piece({ char, col, row, squareName, int
 
   return (
     <motion.div
-      className={`absolute z-10 h-[12.5%] w-[12.5%] p-1 md:p-2 ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
+      className={`absolute z-10 h-[12.5%] w-[12.5%] p-1 md:p-2 ${interactive ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
       initial={false}
       style={{ x: dragX, y: dragY }}
       animate={{ left, top }}

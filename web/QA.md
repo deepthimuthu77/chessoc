@@ -39,3 +39,15 @@ This is a regression and obvious-failure-path pass, not an exhaustive production
 - Four transport tests cover late tickets, failed requests after closing, stalled handshakes, and silent connections. Network timeout tests use a controlled clock; they do not simulate every real network outage.
 
 External-device certificate trust and testing on devices not available here remain deployment verification steps.
+
+## Board and address follow-up - 2026-11-05
+
+- A pending legal move now keeps a presentation-only piece preview at the destination until a server snapshot confirms it. Rejection, protocol error, and disconnect remove the preview without changing authoritative FEN or history.
+- The board isolates piece stacking; reconnect, unavailable, and waiting overlays sit above every piece. The partner bughouse board also displays its own connection state.
+- Empty-square clicks pass through the piece layer to the board buttons; interactive pieces still receive pointer input.
+- Startup now keeps an address monitor open unless `-NoWatch` is supplied. It prints changed LAN/tunnel addresses and updates `.demo/addresses.json` and `.demo/public-url.txt`. A restart check confirmed a replacement Cloudflare URL was printed and saved; Cloudflare issuance exceeded the initial 50-second test window before succeeding.
+- Edge verified the reconnect overlay after a real server restart: every piece stays behind the panel, recovery removes the overlay, and a subsequent e2e4 received the AI reply c7c5.
+- Disconnected finished-game screens previously retained stale rematch capabilities and could show an endless pending request. Disconnect now invalidates capabilities; rematch pending state is entered only after an actual socket send, resets on disconnect, and exposes rejection errors in the result dialog.
+- Reconnect, unavailable-board, waiting-for-players, and result screens provide a Go to dashboard link. Room navigation uses the same label.
+- Edge verified the final production build: reconnect preserved e2e4/c7c5, resign opened the result dialog with dashboard navigation, Play again created a fresh game with swapped colors and an AI opening move, and room navigation returned to the dashboard.
+- Eleven frontend tests pass, including pending-preview acceptance/rollback, capability invalidation across reconnect, and disconnected-send reporting. TypeScript, ESLint, and the production build pass.

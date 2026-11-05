@@ -11,7 +11,10 @@ function harness(freshTicket) {
   const sockets = [];
   class Socket {
     static OPEN = 1;
+    readyState = 0;
+    sent = [];
     constructor() { sockets.push(this); }
+    send(payload) { this.sent.push(payload); }
     close() { this.onclose?.(); }
   }
   const testModule = { exports: {} };
@@ -43,6 +46,17 @@ test('leaving a room while a reconnect ticket is loading never opens another soc
   resolve('late-ticket');
   await reconnect;
   assert.equal(h.sockets.length, 1);
+});
+
+test('send reports whether an action was sent rather than silently losing a disconnected request', () => {
+  const h = harness(async () => 'next');
+  assert.equal(h.transport.send('intent', {}), false);
+  h.sockets[0].readyState = 1;
+  assert.equal(h.transport.send('intent', {}), true);
+  assert.equal(h.sockets[0].sent.length, 1);
+  h.sockets[0].readyState = 3;
+  assert.equal(h.transport.send('intent', {}), false);
+  assert.equal(h.sockets[0].sent.length, 1);
 });
 
 test('a failed reconnect request after leaving does not schedule more retries', async () => {

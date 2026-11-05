@@ -89,7 +89,7 @@ export function GameOverModal({ isOpen, result, onRematch, rematchPending = fals
                 href="/"
                 className="w-full rounded-xl border border-zinc-700 px-8 py-3 text-center font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
               >
-                Back to lobby
+                Go to dashboard
               </Link>
             </div>
           </motion.div>

@@ -21,6 +21,7 @@ export interface GameState {
   capabilities: Capability[];
   version: number;
   pendingIntentId: string | null;
+  pendingMove: { from: string; to: string } | null;
   error: string | null;
   chat: ChatMessage[];
   rematchGameId: string | null;
@@ -32,6 +33,7 @@ export const initialState: GameState = {
   capabilities: [],
   version: -1,
   pendingIntentId: null,
+  pendingMove: null,
   error: null,
   chat: [],
   rematchGameId: null,
@@ -39,7 +41,7 @@ export const initialState: GameState = {
 
 export type Action =
   | { type: 'status'; status: ConnectionStatus }
-  | { type: 'intent'; intentId: string }
+  | { type: 'intent'; intentId: string; move?: { from: string; to: string } }
   | { type: 'envelope'; env: Envelope };
 
 function adopt(state: GameState, snapshot: GameSnapshot, capabilities: Capability[] | null): GameState {
@@ -52,16 +54,19 @@ function adopt(state: GameState, snapshot: GameSnapshot, capabilities: Capabilit
     capabilities: capabilities ?? [],
     version: snapshot.version,
     pendingIntentId: null,
+    pendingMove: null,
+    error: null,
   };
 }
 
 export function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case 'status':
-      return { ...state, connection: action.status };
+      return { ...state, connection: action.status,
+        ...(action.status !== 'connected' ? { pendingIntentId: null, pendingMove: null, capabilities: [] } : {}) };
 
     case 'intent':
-      return { ...state, pendingIntentId: action.intentId, error: null };
+      return { ...state, pendingIntentId: action.intentId, pendingMove: action.move ?? null, error: null };
 
     case 'envelope': {
       const { env } = action;
@@ -77,13 +82,13 @@ export function reducer(state: GameState, action: Action): GameState {
             return adopt(state, m.snapshot, m.capabilities);
           }
           if (m.disposition === 'rejected') {
-            return { ...state, pendingIntentId: null, error: m.reason ?? 'move rejected' };
+            return { ...state, pendingIntentId: null, pendingMove: null, error: m.reason ?? 'move rejected' };
           }
-          return { ...state, pendingIntentId: null };
+          return { ...state, pendingIntentId: null, pendingMove: null };
         }
         case MessageType.Error: {
           const m = env.payload as ErrorMessage;
-          return { ...state, error: m.message };
+          return { ...state, pendingIntentId: null, pendingMove: null, error: m.message };
         }
         case MessageType.Chat: {
           const m = env.payload as ChatMessage;

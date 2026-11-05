@@ -23,6 +23,7 @@ interface BoardProps {
   allowPremove?: boolean;
   myColor?: 'white' | 'black' | null;
   premove?: { from: string; to: string } | null;
+  pendingMove?: { from: string; to: string } | null;
   onPremove?: (from: string, to: string) => void;
 }
 
@@ -63,12 +64,20 @@ export const Board = memo(function Board({
   allowPremove = false,
   myColor = null,
   premove = null,
+  pendingMove = null,
   onPremove,
 }: BoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [premoveFrom, setPremoveFrom] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const flip = orientation === 'black';
+  const displayedPieces = useMemo(() => {
+    if (!pendingMove) return pieces;
+    const moving = pieces.find((piece) => piece.square === pendingMove.from);
+    if (!moving) return pieces;
+    return pieces.filter((piece) => piece.square !== pendingMove.from && piece.square !== pendingMove.to)
+      .concat({ ...moving, square: pendingMove.to });
+  }, [pieces, pendingMove]);
   const dropMode = dropTargets.length > 0;
   const dropSet = new Set(dropMode ? dropTargets : []);
   // Premoves are active only while it isn't our turn (interactive) and there's no drop in progress.
@@ -153,7 +162,8 @@ export const Board = memo(function Board({
     <div
       ref={boardRef}
       aria-label="Chess board"
-      className="relative grid aspect-square w-full max-w-2xl grid-cols-8 grid-rows-8 overflow-hidden rounded-md border-[6px] border-zinc-900 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+      aria-busy={!!pendingMove}
+      className="relative isolate grid aspect-square w-full max-w-2xl grid-cols-8 grid-rows-8 overflow-hidden rounded-md border-[6px] border-zinc-900 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
     >
       {Array.from({ length: 64 }, (_, index) => {
         const row = Math.floor(index / 8);
@@ -226,8 +236,8 @@ export const Board = memo(function Board({
       })}
 
       <div className="pointer-events-none absolute inset-0">
-        <div className="pointer-events-auto relative h-full w-full">
-          {pieces.map(({ char, square }) => {
+        <div className="pointer-events-none relative h-full w-full">
+          {displayedPieces.map(({ char, square }) => {
             const { col, row } = gridOf(square, flip);
             return (
               <Piece

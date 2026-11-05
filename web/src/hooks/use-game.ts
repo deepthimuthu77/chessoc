@@ -112,7 +112,10 @@ export function useGame(room: string, preferredSeat?: string | null) {
             }
             dispatch({ type: 'envelope', env });
           },
-          onStatus: (status) => dispatch({ type: 'status', status }),
+          onStatus: (status) => {
+            if (status !== 'connected') setRematchRequestRoom(null);
+            dispatch({ type: 'status', status });
+          },
         });
 
         if (cancelled) {
@@ -169,13 +172,16 @@ export function useGame(room: string, preferredSeat?: string | null) {
   }, [state.projection]);
 
   const send = useCallback((cap: Capability | undefined) => {
-    if (!cap || !transportRef.current) return;
-    transportRef.current.send(MessageType.Intent, {
-      intentId: `i-${Math.random().toString(36).slice(2)}`,
+    if (!cap || !transportRef.current) return false;
+    const intentId = `i-${Math.random().toString(36).slice(2)}`;
+    const sent = transportRef.current.send(MessageType.Intent, {
+      intentId,
       capabilityId: cap.id,
       params: {},
       clientTimestamp: Date.now(),
     });
+    if (sent) dispatch({ type: 'intent', intentId });
+    return sent;
   }, []);
 
   const sendChat = useCallback((text: string) => {
@@ -187,7 +193,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
     (cap: Capability | undefined) => {
       if (!cap || state.pendingIntentId) return;
       const intentId = `i-${Math.random().toString(36).slice(2)}`;
-      dispatch({ type: 'intent', intentId });
+      const uci = cap.params.uci;
+      dispatch({ type: 'intent', intentId,
+        move: uci && uci[1] !== '@' ? { from: uci.slice(0, 2), to: uci.slice(2, 4) } : undefined });
       transportRef.current?.send(MessageType.Intent, {
         intentId,
         capabilityId: cap.id,
@@ -244,10 +252,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
   );
   const rematch = useCallback(() => {
     const capability = findRematch(state.capabilities);
-    if (!capability) return;
-    setRematchRequestRoom(room);
-    send(capability);
-  }, [room, send, state.capabilities]);
+    if (state.connection !== 'connected') return;
+    if (send(capability)) setRematchRequestRoom(room);
+  }, [room, send, state.capabilities, state.connection]);
 
   const snapshot = state.projection;
   const partnerSnapshot = partnerState.projection;
@@ -396,6 +403,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
     isVsEngine,
     error: joinError ?? state.error,
     pieces,
+    pendingMove: state.pendingMove,
     legalMoves,
     lastMove,
     checkSquare,
@@ -442,6 +450,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
       receivedAt: partnerReceivedAt,
       clocksRunning: !!partnerSnapshot && !partnerSnapshot.result && clocksRunning && partnerState.connection === 'connected',
       connected: !!partnerSnapshot,
+      status: partnerState.connection,
       pieces: partnerPieces,
       lastMove: partnerLastMove,
       checkSquare: partnerCheckSquare,
@@ -470,7 +479,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
     offerDraw,
     respondDraw,
     rematch,
-    rematchPending: rematchRequestRoom === room,
+    rematchPending: rematchRequestRoom === room && state.connection === 'connected' && !state.error,
     rematchGameId: state.rematchGameId,
     // control state
     active,
@@ -478,7 +487,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
     canOfferDraw: active && has('offer_draw'),
     drawOffer,
     confirmResign: getSettings().confirmResign,
-    canRematch: has('rematch'),
+    canRematch: state.connection === 'connected' && has('rematch'),
     promotion,
     promotionColor: (myColor ?? 'white') as Color,
     choosePromotion,

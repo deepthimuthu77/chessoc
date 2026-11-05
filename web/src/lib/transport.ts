@@ -35,10 +35,12 @@ export class LiveTransport {
     this.open(this.opts.ticket, false);
   }
 
-  send(type: string, payload: unknown): void {
+  send(type: string, payload: unknown): boolean {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(encode(type, payload));
+      return true;
     }
+    return false;
   }
 
   close(): void {
