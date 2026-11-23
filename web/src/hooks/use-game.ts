@@ -185,8 +185,8 @@ export function useGame(room: string, preferredSeat?: string | null) {
   }, []);
 
   const sendChat = useCallback((text: string) => {
-    if (!transportRef.current || !text.trim()) return;
-    transportRef.current.send(MessageType.Chat, { text: text.trim() });
+    if (!transportRef.current || !text.trim()) return false;
+    return transportRef.current.send(MessageType.Chat, { text: text.trim() });
   }, []);
 
   const commitMove = useCallback(
@@ -303,8 +303,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const seatsFilled = isBughouse
     ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
         partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId].filter(Boolean).length
-    : seat?.seatsFilled ?? 0;
-  const clocksRunning = !isBughouse || seatsFilled === 4;
+    : snapshot ? [snapshot.whitePlayerId, snapshot.blackPlayerId].filter(Boolean).length
+      : seat?.seatsFilled ?? 0;
+  const clocksRunning = seatsFilled === (isBughouse ? 4 : 2);
 
   const clocks = snapshot
     ? displayClocks(snapshot.clockSample, receivedAt, !snapshot.result && clocksRunning)
@@ -341,7 +342,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
     ? [snapshot?.whitePlayerId, snapshot?.blackPlayerId,
         partnerSnapshot?.whitePlayerId, partnerSnapshot?.blackPlayerId]
         .filter((id) => id && !id.startsWith('engine')).length
-    : seat?.humansJoined ?? 0;
+    : snapshot ? [snapshot.whitePlayerId, snapshot.blackPlayerId]
+        .filter((id) => id && !id.startsWith('engine')).length
+      : seat?.humansJoined ?? 0;
   const boardA = seat?.board === 'B' ? partnerSnapshot : snapshot;
   const boardB = seat?.board === 'B' ? snapshot : partnerSnapshot;
   const occupiedBughouseSeats = new Set([

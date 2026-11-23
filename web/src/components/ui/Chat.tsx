@@ -10,8 +10,9 @@ const COLOR: Record<string, string> = {
   spectator: 'text-accent-400',
 };
 
-export function Chat({ messages, onSend, disabled = false }: { messages: ChatMessage[]; onSend: (text: string) => void; disabled?: boolean }) {
+export function Chat({ messages, onSend, disabled = false }: { messages: ChatMessage[]; onSend: (text: string) => boolean; disabled?: boolean }) {
   const [text, setText] = useState('');
+  const [sendFailed, setSendFailed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,8 +24,9 @@ export function Chat({ messages, onSend, disabled = false }: { messages: ChatMes
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!disabled && text.trim()) {
-      onSend(text);
-      setText('');
+      const sent = onSend(text);
+      setSendFailed(!sent);
+      if (sent) setText('');
     }
   }
 
@@ -51,10 +53,12 @@ export function Chat({ messages, onSend, disabled = false }: { messages: ChatMes
           disabled={disabled}
           maxLength={500}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); setSendFailed(false); }}
+          aria-describedby={sendFailed ? 'chat-send-error' : undefined}
           placeholder={disabled ? 'Reconnect to send messages' : 'Message…'}
           className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-accent-500"
         />
+        {sendFailed && <p id="chat-send-error" role="alert" className="mt-1 text-xs text-amber-300">Message not sent. Reconnect and try again.</p>}
       </form>
     </div>
   );

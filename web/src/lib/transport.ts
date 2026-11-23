@@ -28,23 +28,56 @@ export class LiveTransport {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private connectTimer?: ReturnType<typeof setTimeout>;
   private lastInboundAt = 0;
+  private online = true;
+  private reconnectEpoch = 0;
+
+  private readonly onOffline = () => {
+    if (this.closed) return;
+    this.online = false;
+    this.reconnectEpoch += 1;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.stopPing();
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
+    this.opts.onStatus('reconnecting');
+  };
+
+  private readonly onOnline = () => {
+    if (this.closed || this.online) return;
+    this.online = true;
+    this.attempt = 0;
+    this.scheduleReconnect(true);
+  };
 
   constructor(private readonly opts: TransportOptions) {}
 
   start(): void {
-    this.open(this.opts.ticket, false);
+    window.addEventListener('offline', this.onOffline);
+    window.addEventListener('online', this.onOnline);
+    this.online = window.navigator.onLine !== false;
+    if (this.online) this.open(this.opts.ticket, false);
+    else this.opts.onStatus('reconnecting');
   }
 
   send(type: string, payload: unknown): boolean {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(encode(type, payload));
-      return true;
+    if (!this.closed && this.online && this.socket?.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(encode(type, payload));
+        return true;
+      } catch {
+        this.socket.close();
+      }
     }
     return false;
   }
 
   close(): void {
     this.closed = true;
+    this.reconnectEpoch += 1;
+    window.removeEventListener('offline', this.onOffline);
+    window.removeEventListener('online', this.onOnline);
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.connectTimer) clearTimeout(this.connectTimer);
     this.stopPing();
@@ -53,7 +86,7 @@ export class LiveTransport {
   }
 
   private open(ticket: string, isReconnect: boolean): void {
-    if (this.closed) return;
+    if (this.closed || !this.online) return;
     this.opts.onStatus(isReconnect ? 'reconnecting' : 'connecting');
     const query = `ticket=${encodeURIComponent(ticket)}&gameId=${encodeURIComponent(this.opts.gameId)}`;
     const wsBase = CONFIGURED_WS_BASE || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
@@ -106,19 +139,23 @@ export class LiveTransport {
     };
   }
 
-  private scheduleReconnect(): void {
+  private scheduleReconnect(immediate = false): void {
+    if (this.closed) return;
+    const epoch = ++this.reconnectEpoch;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.opts.onStatus('reconnecting');
+    if (!this.online) return;
     const backoff = Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.attempt);
-    const delay = backoff + Math.random() * 250;
+    const delay = immediate ? 0 : backoff + Math.random() * 250;
     this.attempt += 1;
     this.reconnectTimer = setTimeout(async () => {
-      if (this.closed) return;
+      if (this.closed || !this.online || epoch !== this.reconnectEpoch) return;
       try {
         const ticket = await this.opts.freshTicket();
-        if (this.closed) return;
+        if (this.closed || !this.online || epoch !== this.reconnectEpoch) return;
         this.open(ticket, true);
       } catch {
-        if (!this.closed) this.scheduleReconnect();
+        if (!this.closed && this.online && epoch === this.reconnectEpoch) this.scheduleReconnect();
       }
     }, delay);
   }
