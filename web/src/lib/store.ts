@@ -24,6 +24,7 @@ export interface GameState {
   pendingMove: { from: string; to: string } | null;
   error: string | null;
   chat: ChatMessage[];
+  chatFailure: { message: string; text: string } | null;
   rematchGameId: string | null;
 }
 
@@ -36,10 +37,12 @@ export const initialState: GameState = {
   pendingMove: null,
   error: null,
   chat: [],
+  chatFailure: null,
   rematchGameId: null,
 };
 
 export type Action =
+  | { type: 'chat_sent' }
   | { type: 'status'; status: ConnectionStatus }
   | { type: 'intent'; intentId: string; move?: { from: string; to: string } }
   | { type: 'envelope'; env: Envelope };
@@ -61,6 +64,8 @@ function adopt(state: GameState, snapshot: GameSnapshot, capabilities: Capabilit
 
 export function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
+    case 'chat_sent':
+      return { ...state, chatFailure: null };
     case 'status':
       return { ...state, connection: action.status,
         ...(action.status !== 'connected' ? { pendingIntentId: null, pendingMove: null, capabilities: [] } : {}) };
@@ -88,11 +93,14 @@ export function reducer(state: GameState, action: Action): GameState {
         }
         case MessageType.Error: {
           const m = env.payload as ErrorMessage;
+          if (m.code === 'chat_rate_limited') {
+            return { ...state, chatFailure: { message: m.message, text: m.text ?? '' } };
+          }
           return { ...state, pendingIntentId: null, pendingMove: null, error: m.message };
         }
         case MessageType.Chat: {
           const m = env.payload as ChatMessage;
-          return { ...state, chat: [...state.chat, m] };
+          return { ...state, chat: [...state.chat.slice(-199), m] };
         }
         case MessageType.RematchReady: {
           const m = env.payload as RematchReady;

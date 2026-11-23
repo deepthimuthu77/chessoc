@@ -90,7 +90,7 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
           <aside className="grid gap-4" aria-label="Game details">
             <MoveHistory history={game.history} />
             <GameControls active={game.active} canAbort={game.canAbort} canOfferDraw={game.canOfferDraw} showDraw={!game.isVsEngine} drawOffer={game.drawOffer} requireConfirm={game.confirmResign} onResign={game.resign} onAbort={game.abort} onOfferDraw={game.offerDraw} onRespondDraw={game.respondDraw} />
-            {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />}
+            {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} failure={game.chatFailure} disabled={game.status !== 'connected'} />}
             <div className="surface p-3"><FeatureLink href="/watch" icon="watch" title="The live gallery" detail="See what’s happening across the club." /><FeatureLink href="/history" icon="history" title="Your game collection" detail="Every finished game, ready to revisit." /></div>
           </aside>
         </div>
@@ -237,7 +237,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
-          <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />
+          <Chat messages={game.chat} onSend={game.sendChat} failure={game.chatFailure} disabled={game.status !== 'connected'} />
         </aside>
       </div>
 

@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 
 const paths = {
+  smile: <><circle cx="12" cy="12" r="9" /><path d="M8 14s1 3 4 3 4-3 4-3M8 9h.01M16 9h.01" /></>,
+  send: <><path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15" /></>,
   play: <><path d="m9 5 11 7-11 7V5Z" /><path d="M4 5v14" /></>,
   board: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16M4 15h16M10 4v16M15 4v16" /></>,
   knight: <><path d="m7 17 1-4-3-2 4-6 5-2 1 4c4 2 5 6 4 10H7Zm0 0-2 4h16l-2-4" /><path d="M11 8h.01M9 4l-1-2" /></>,

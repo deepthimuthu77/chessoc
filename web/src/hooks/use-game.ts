@@ -186,7 +186,9 @@ export function useGame(room: string, preferredSeat?: string | null) {
 
   const sendChat = useCallback((text: string) => {
     if (!transportRef.current || !text.trim()) return false;
-    return transportRef.current.send(MessageType.Chat, { text: text.trim() });
+    const sent = transportRef.current.send(MessageType.Chat, { text: text.trim() });
+    if (sent) dispatch({ type: 'chat_sent' });
+    return sent;
   }, []);
 
   const commitMove = useCallback(
@@ -366,7 +368,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const isVsEngine = !!snapshot && (snapshot.whitePlayerId === 'engine' || snapshot.blackPlayerId === 'engine');
   const caps = state.capabilities;
   const has = (kind: Capability['kind']) => caps.some((c) => c.kind === kind);
-  const active = state.connection === 'connected' && !!snapshot && !snapshot.result && isPlayer;
+  const active = state.connection === 'connected' && !!snapshot && !snapshot.result && isPlayer && clocksRunning;
   const drawOffer: 'none' | 'incoming' | 'sent' = !active
     ? 'none'
     : has('respond_draw')
@@ -429,6 +431,7 @@ export function useGame(room: string, preferredSeat?: string | null) {
     // chat
     chat,
     sendChat,
+    chatFailure: state.chatFailure,
     // crazyhouse
     isCrazyhouse,
     isBughouse,

@@ -94,6 +94,7 @@ export interface ResultMessage {
 export interface ErrorMessage {
   code: string;
   message: string;
+  text?: string;
 }
 
 export function encode(type: string, payload: unknown): string {
