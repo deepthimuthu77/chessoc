@@ -51,3 +51,14 @@ External-device certificate trust and testing on devices not available here rema
 - Reconnect, unavailable-board, waiting-for-players, and result screens provide a Go to dashboard link. Room navigation uses the same label.
 - Edge verified the final production build: reconnect preserved e2e4/c7c5, resign opened the result dialog with dashboard navigation, Play again created a fresh game with swapped colors and an AI opening move, and room navigation returned to the dashboard.
 - Eleven frontend tests pass, including pending-preview acceptance/rollback, capability invalidation across reconnect, and disconnected-send reporting. TypeScript, ESLint, and the production build pass.
+
+## Premium interface and board input - 2026-11-23
+
+- The redesign is isolated on `STK/premium-ui-ux`. Shared colors, serif headings, navigation, button hierarchy, focus styling, and restrained motion cover dashboard, rooms, Watch, review, friends, rankings, profile, settings, and account entry.
+- Dashboard setup groups variant, time, and opponent/seating choices around one primary action. Contextual links connect the live gallery, game collection, friends, review, and game creation. Existing features are described without invented paid tiers or activity.
+- Board clocks align with the board. Reconnect/result/waiting screens retain dashboard exits. Motion honors both the OS preference and the device setting; live board updates do not trigger page-entry animation.
+- Dragging after scrolling mixed Motion's page coordinates with viewport board bounds. Drops now use the released pointer's client coordinates and exclude the board frame. Touch drags disable browser panning on the piece. A browser drag with the page scrolled 220 pixels accepted e2e4 in a real match.
+- Mobile sign-in was checked at 390 by 844 with no horizontal overflow. Its introduction was shortened so both entry actions fit. The mobile navigation wraps onto its own row.
+- Fourteen frontend tests pass, including scrolled mouse coordinates, touch/black orientation, outside-frame drops, pending presentation, and reconnect/send regressions. ESLint and the production Docker frontend build pass.
+- The full Compose stack passed website, API/database, and real-engine readiness checks. A fresh API/WebSocket smoke pass through Caddy played and completed standard and crazyhouse AI games and a bughouse game with three humans and one computer. It checked explicit ab/bb seats, live discovery, recorded review moves, resignation, and eight page routes returning HTTP 200. Test guests did not reuse a user's identity.
+- Remaining visual verification: the final Watch/pin/expanded-tile interactions, review controls, mobile game dragging, and all account-page layouts could not be rechecked in this session because local browser access is unavailable for the chat. API checks and passing builds are not substitutes for those browser checks.

@@ -35,21 +35,21 @@ export function RatingChart({ points }: { points: RatingPoint[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Rating over time">
       <defs>
         <linearGradient id="ratingFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+          <stop offset="0%" stopColor="#b4cba4" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#b4cba4" stopOpacity="0" />
         </linearGradient>
       </defs>
 
       {[hi, Math.round((hi + lo) / 2), lo].map((r) => (
         <g key={r}>
-          <line x1={PAD.left} y1={y(r)} x2={W - PAD.right} y2={y(r)} stroke="#27272a" strokeWidth="1" />
-          <text x={PAD.left - 6} y={y(r) + 4} textAnchor="end" fontSize="11" fill="#71717a">{r}</text>
+          <line x1={PAD.left} y1={y(r)} x2={W - PAD.right} y2={y(r)} stroke="#303a32" strokeWidth="1" />
+          <text x={PAD.left - 6} y={y(r) + 4} textAnchor="end" fontSize="11" fill="#9aa69b">{r}</text>
         </g>
       ))}
 
       <path d={area} fill="url(#ratingFill)" />
-      <path d={line} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(points.length - 1)} cy={y(last)} r="4" fill="#3b82f6" />
+      <path d={line} fill="none" stroke="#b4cba4" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(points.length - 1)} cy={y(last)} r="4" fill="#b4cba4" />
     </svg>
   );
 }

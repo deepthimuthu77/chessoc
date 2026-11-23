@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
+import { Icon } from '@/components/ui/Icon';
 import { LiveBoardPreview } from '@/components/ui/LiveBoardPreview';
 import { formatClock } from '@/lib/view-model';
 import type { WatchBoard, WatchGame } from './use-watch-feed';
@@ -71,11 +72,11 @@ export const WatchGameCard = memo(function WatchGameCard({
   const result = [game.result, game.winner ? `Winner: ${game.winner}` : ''].filter(Boolean).join(' · ');
   return (
     <article ref={ref} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 420px' }}
-      className={`min-w-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-lg ${isBughouse && !tiled ? 'sm:col-span-2' : ''}`}>
+      className={`watch-card min-w-0 ${isBughouse && !tiled ? 'sm:col-span-2' : ''}`}>
       <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 ${dense ? 'py-1' : 'py-3'}`}>
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${running ? 'bg-rose-400' : 'bg-zinc-500'}`} />
-          <span className="font-black uppercase text-zinc-200">{game.variant}</span>
+          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${running ? 'bg-accent-300' : 'bg-zinc-500'}`} />
+          <span className="font-semibold uppercase text-zinc-200">{game.variant}</span>
           <span className="capitalize text-zinc-400">{game.speed}</span>
           <span className="text-zinc-400">{status}</span>
         </div>
@@ -86,22 +87,22 @@ export const WatchGameCard = memo(function WatchGameCard({
           <button type="button" onClick={() => onPin(game.gameId, game)} disabled={pinDisabled} aria-pressed={pinned}
             aria-label={`${pinned ? 'Unpin' : 'Pin'} ${game.white} vs ${game.black}${isBughouse ? ', both boards' : ''}`}
             title={pinDisabled ? 'Unpin a match to make room (maximum four)' : undefined}
-            className="rounded border border-zinc-700 px-2 py-1 font-bold text-blue-400 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40">
-            {pinned ? 'Unpin' : pinDisabled ? '4/4 pinned' : 'Pin'}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pinned ? 'border-accent-400/40 bg-accent-400/10 text-accent-200' : 'border-zinc-700 text-zinc-300 hover:border-accent-400/40'}`}>
+            <Icon name="pin" size={12} />{pinned ? 'Unpin' : pinDisabled ? '4/4 pinned' : 'Pin'}
           </button>
         </div>
       </div>
       <Link href={ended ? reviewUrl : roomUrl} prefetch={false}
         aria-label={`${ended ? 'Review' : 'Watch'} ${game.variant}: ${game.white} vs ${game.black}${isBughouse ? ', boards A and B' : ''}`}
-        className={`grid gap-px bg-zinc-800 outline-offset-2 focus-visible:outline-2 focus-visible:outline-blue-400 ${isBughouse ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        className={`grid gap-px bg-zinc-800 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent-400 ${isBughouse ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {game.boards.map((board) => <LiveBoardPanel key={board.gameId} board={board} dense={dense} tiled={tiled}
           showPockets={game.variant === 'crazyhouse' || isBughouse} onScreen={onScreen}
           running={running} frozenAt={ended ? 0 : frozenAt} />)}
       </Link>
       {ended && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 px-3 py-2 text-xs text-zinc-400">
         <span>{result || 'Last known position. Open review for the final game.'}</span>
-        <div className="flex gap-3"><Link prefetch={false} href={roomUrl} className="text-blue-400">Open room</Link>
-          <Link prefetch={false} href={reviewUrl} className="text-blue-400">Review game</Link></div>
+        <div className="flex gap-3"><Link prefetch={false} href={roomUrl} className="text-accent-400">Open room</Link>
+          <Link prefetch={false} href={reviewUrl} className="text-accent-400">Review game</Link></div>
       </div>}
     </article>
   );

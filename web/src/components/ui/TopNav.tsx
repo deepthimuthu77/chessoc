@@ -2,55 +2,28 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Icon, type IconName } from './Icon';
 
-const LINKS = [
-  { href: '/', label: 'Play' },
-  { href: '/watch', label: 'Watch' },
-  { href: '/leaderboard', label: 'Leaderboard' },
-  { href: '/friends', label: 'Friends' },
-  { href: '/history', label: 'History' },
-  { href: '/settings', label: 'Settings' },
+const LINKS: { href: string; label: string; icon: IconName }[] = [
+  { href: '/', label: 'Play', icon: 'board' },
+  { href: '/watch', label: 'Watch', icon: 'watch' },
+  { href: '/friends', label: 'Friends', icon: 'people' },
+  { href: '/history', label: 'History', icon: 'history' },
+  { href: '/leaderboard', label: 'Rankings', icon: 'trophy' },
 ];
 
 export function TopNav({ username, accountId, onLogout }: { username?: string; accountId?: string; onLogout?: () => void }) {
   const path = usePathname();
-
-  return (
-    <nav className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-900/60 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
-      <Link href="/" className="text-xl font-black tracking-tighter bg-gradient-to-br from-white to-zinc-400 bg-clip-text text-transparent">
-        Chessoc
-      </Link>
-
-      <div className="order-3 grid w-full grid-cols-3 gap-1 md:order-none md:flex md:w-auto md:items-center">
-        {LINKS.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`rounded-lg px-2 py-2 text-center text-sm font-bold transition-colors lg:px-4 ${
-              path === l.href ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {l.label}
-          </Link>
-        ))}
+  return <>
+    <a href="#main-content" className="skip-link">Skip to content</a>
+    <nav className="site-nav" aria-label="Main navigation"><div className="site-nav-inner">
+      <Link href="/" className="wordmark" aria-label="Chessoc home"><span className="brand-mark"><Icon name="knight" size={32} /></span>chessoc<span className="text-accent-400">.</span></Link>
+      <div className="nav-links">{LINKS.map(link => <Link key={link.href} href={link.href} className="nav-link" aria-current={path === link.href ? 'page' : undefined}><Icon name={link.icon} size={15} />{link.label}</Link>)}</div>
+      <div className="nav-account">
+        <Link href="/settings" className="nav-logout" aria-label="Settings" aria-current={path === '/settings' ? 'page' : undefined}><Icon name="settings" size={17} /></Link>
+        {username && accountId ? <Link href={`/profile/${accountId}`} className="flex items-center gap-2" aria-label={`${username}'s profile`}><span className="avatar">{username.slice(0, 2).toUpperCase()}</span><span><span className="nav-account-name">{username}</span><span className="nav-account-label">{accountId.startsWith('guest-') ? 'Guest player' : 'Your profile'}</span></span></Link> : <Link href="/login" className="button-secondary">Sign in</Link>}
+        {onLogout && <button type="button" onClick={onLogout} aria-label="Logout" title="Logout" className="nav-logout"><Icon name="logout" size={16} /></button>}
       </div>
-
-      <div className="flex min-w-0 items-center gap-3">
-        {username && accountId && (
-          <Link href={`/profile/${accountId}`} className="max-w-24 truncate text-sm font-medium text-zinc-300 hover:text-white">
-            {username}
-          </Link>
-        )}
-        {onLogout && (
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-bold text-zinc-400 transition-colors hover:bg-zinc-800"
-          >
-            Logout
-          </button>
-        )}
-      </div>
-    </nav>
-  );
+    </div></nav>
+  </>;
 }

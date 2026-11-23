@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api, type GameHistoryRow } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
+import { Icon } from '@/components/ui/Icon';
 
 const RESULT_STYLE: Record<string, string> = {
   win: 'text-green-400',
@@ -38,14 +40,14 @@ export default function HistoryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
-      <div className="mx-auto max-w-3xl px-6 py-12">
-        <h1 className="mb-6 text-3xl font-black tracking-tighter">Game history</h1>
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
+        <PageHeading eyebrow="YOUR COLLECTION" title="Every game, worth revisiting." description="The wins, the lessons, the almosts. Replay your games and explore the moves that mattered." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           {loading ? (
             <p role="status" className="px-6 py-12 text-center text-zinc-400">Loading game history…</p>
           ) : result?.error ? (
@@ -54,29 +56,29 @@ export default function HistoryPage() {
               <button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-3 underline">Retry history</button>
             </div>
           ) : games.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm italic text-zinc-600">
-              No finished games yet.
+            <div className="empty-state"><span className="icon-well"><Icon name="history" /></span><h2>Your collection starts here.</h2><p>Finish a game and return to replay every move, flip the board, and explore positions with the engine.</p><Link href="/" className="button-primary">Play your first game<Icon name="arrow" size={15} /></Link>
             </div>
           ) : (
             games.map((g) => (
               <Link
                 key={g.gameId}
                 href={`/review/${g.gameId}`}
-                className="flex items-center gap-4 border-b border-zinc-800/70 px-6 py-3 transition-colors last:border-0 hover:bg-zinc-800/40"
+                className="flex flex-wrap items-center gap-3 border-b border-zinc-800/70 px-6 py-3 transition-colors last:border-0 hover:bg-zinc-800/40"
               >
                 <span className={`w-14 text-sm font-bold uppercase ${RESULT_STYLE[g.result]}`}>{g.result}</span>
-                <div className="flex-1">
+                <div className="min-w-24 flex-1">
                   <span className="text-zinc-100">vs {g.opponent}</span>
                   <span className="ml-2 text-xs text-zinc-500">{g.reason}</span>
                 </div>
                 <span className="text-xs capitalize text-zinc-500">{g.variant}{g.rated ? ' · rated' : ''}</span>
-                <span className="w-24 text-right text-xs text-zinc-600">
+                <span className="text-right text-xs text-zinc-500">
                   {new Date(g.endedAt).toLocaleDateString()}
                 </span>
               </Link>
             ))
           )}
         </div>
+        <JourneyNav destinations={['play', 'friends', 'watch']} />
       </div>
     </main>
   );

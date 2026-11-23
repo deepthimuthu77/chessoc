@@ -2,6 +2,7 @@
 import React from 'react';
 import { motion, useMotionValue, useReducedMotion } from 'framer-motion';
 import { prefersReducedMotion } from '@/lib/settings';
+import { dropClientPoint } from '@/lib/board-input';
 
 export const PIECE_POSITIONS: Record<string, { x: string; y: string }> = {
   K: { x: '0%', y: '0%' },
@@ -44,16 +45,18 @@ export const Piece = React.memo(function Piece({ char, col, row, squareName, int
     <motion.div
       className={`absolute z-10 h-[12.5%] w-[12.5%] p-1 md:p-2 ${interactive ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
       initial={false}
-      style={{ x: dragX, y: dragY }}
+      style={{ x: dragX, y: dragY, touchAction: interactive ? 'none' : 'auto' }}
       animate={{ left, top }}
-      whileHover={interactive && !reduce ? { scale: 1.15 } : undefined}
+      whileHover={interactive && !reduce ? { scale: 1.04 } : undefined}
       transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 200, damping: 25 }}
       drag={interactive}
       dragMomentum={false}
       onClick={() => interactive && onPieceClick(squareName)}
       onDragStart={() => interactive && onPieceClick(squareName, true)}
-      onDragEnd={(_, info) => {
-        if (interactive) onDrop(squareName, { x: info.point.x, y: info.point.y });
+      onDragEnd={(event) => {
+        // Motion's info.point uses page coordinates; board bounds use viewport coordinates.
+        const point = dropClientPoint(event);
+        if (interactive && point) onDrop(squareName, point);
         if (reduce) {
           dragX.jump(0);
           dragY.jump(0);

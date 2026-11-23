@@ -21,9 +21,9 @@ export function MoveHistory({ history }: { history: string[] }) {
   }
 
   return (
-    <div className="flex flex-col w-full h-64 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-xl overflow-hidden">
-      <div className="p-3 bg-zinc-950 border-b border-zinc-800">
-        <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest text-center">Move History</h3>
+    <div className="surface flex h-72 w-full flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
+        <h3 className="text-xs font-medium text-zinc-200">The scoresheet</h3><span className="font-mono text-[10px] text-zinc-500">{history.length} plies</span>
       </div>
       
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -38,8 +38,8 @@ export function MoveHistory({ history }: { history: string[] }) {
           </div>
         ))}
         {history.length === 0 && (
-          <div className="flex items-center justify-center h-full text-zinc-600 text-sm italic">
-            Waiting for first move...
+          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+            Every story starts with a move.
           </div>
         )}
       </div>

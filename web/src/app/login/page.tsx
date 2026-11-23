@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { Icon } from '@/components/ui/Icon';
 import { useAuth } from '@/hooks/use-auth';
 import { prefersReducedMotion } from '@/lib/settings';
 
@@ -36,25 +38,21 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+    <main className="app-background flex min-h-screen items-center justify-center p-5 sm:p-10"><div className="auth-grid">
+      <aside className="auth-story"><Link href="/" className="wordmark"><Icon name="knight" size={28} />chessoc.</Link><div className="auth-intro"><p className="eyebrow mb-4">FOR THE LOVE OF THE GAME</p><h2 className="display-title">An open seat.<br />A world of possibilities.</h2><p className="page-description mt-5">The timeless game, with a few new ways to fall in love with it.</p></div><div className="auth-details space-y-5"><div className="flex gap-3"><Icon name="layers" className="text-accent-300" /><p className="text-xs leading-relaxed text-zinc-400">Chess, crazyhouse, and bughouse.<br /><span className="text-zinc-500">Your friends, your team, or the computer.</span></p></div><div className="flex gap-3"><Icon name="watch" className="text-accent-300" /><p className="text-xs leading-relaxed text-zinc-400">A live gallery, made personal.<br /><span className="text-zinc-500">Pin four games. Follow every move.</span></p></div><Link href="/watch" className="text-link">Look around the gallery<Icon name="arrow" size={15} /></Link></div></aside>
       <motion.div
         initial={prefersReducedMotion() ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="w-full max-w-md rounded-3xl border border-slate-800/50 bg-slate-900/40 p-10 shadow-[0_0_60px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+        className="auth-form min-w-0"
       >
-        <h1 className="mb-1 text-center text-4xl font-black tracking-tighter bg-gradient-to-br from-white to-zinc-400 bg-clip-text text-transparent">
-          Chessoc
-        </h1>
-        <p className="mb-8 text-center text-sm text-zinc-500">
-          {mode === 'login' ? 'Sign in to play' : 'Create your account'}
-        </p>
+        <p className="eyebrow mb-4">{mode === 'login' ? 'WELCOME BACK' : 'YOUR NEXT CHAPTER'}</p><h1 className="page-title">{mode === 'login' ? 'Take your seat.' : 'Make it your game.'}</h1><p className="page-description mb-7">{mode === 'login' ? 'Sign in, settle in, and make your next move.' : 'A name, an account, and a place to call your own.'}</p>
         {sessionExpired && <p role="alert" className="mb-4 text-sm text-amber-300">Your session expired. Sign in again to continue with your account. Starting a new guest session creates a different identity.</p>}
         {authError && <p role="alert" className="mb-4 text-sm text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
         <form onSubmit={submit} aria-busy={busy} className="flex flex-col gap-4">
           {mode === 'register' && (
-            <Field label="Username" value={username} onChange={setUsername} placeholder="magnus" autoComplete="username" minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" disabled={busy} />
+            <Field label="Username" value={username} onChange={setUsername} placeholder="Choose your player name" autoComplete="username" minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" disabled={busy} />
           )}
           <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" autoComplete={mode === 'login' ? 'username' : 'email'} disabled={busy} />
           <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'register' ? 6 : undefined} disabled={busy} />
@@ -64,7 +62,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy || !ready}
-            className="mt-2 rounded-xl bg-gradient-to-b from-[#5c8aab] to-[#4b7399] px-8 py-3 font-bold text-white shadow-[0_0_20px_rgba(75,115,153,0.4)] transition-all hover:from-[#6a9bc2] hover:to-[#5785b0] disabled:opacity-60"
+            className="button-primary mt-2"
           >
             {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
@@ -102,12 +100,12 @@ export default function LoginPage() {
               pending.current = false;
             }
           }}
-          className="w-full rounded-xl border border-zinc-700 px-8 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-60"
+          className="button-secondary w-full"
         >
           {busy ? 'Please wait…' : sessionExpired ? 'Start a new guest session' : account?.id.startsWith('guest-') ? 'Resume guest session' : account ? 'Switch to a guest session' : 'Continue as guest'}
         </button>
       </motion.div>
-    </main>
+    </div></main>
   );
 }
 
@@ -136,7 +134,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="text-xs font-medium text-zinc-400">{label}</span>
       <input
         type={type}
         name={label.toLowerCase()}
@@ -149,7 +147,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white placeholder-zinc-600 outline-none transition-colors focus:border-blue-500"
+        className="field"
       />
     </label>
   );

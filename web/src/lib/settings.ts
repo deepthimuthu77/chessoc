@@ -40,4 +40,5 @@ export function getSettings(): Settings {
 
 export function setSettings(s: Settings): void {
   window.localStorage.setItem(KEY, JSON.stringify(s));
+  window.dispatchEvent(new Event('chessoc-settings-changed'));
 }

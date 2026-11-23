@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { Icon } from './Icon';
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 
@@ -24,10 +25,11 @@ export function ConnectionOverlay({ status }: { status: Status }) {
   return (
     <div role="status" className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="relative rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center shadow-2xl">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">{copy.tag}</p>
-        <h1 className="mt-2 text-2xl font-bold text-white">{copy.title}</h1>
-        <p className="mt-2 max-w-sm text-sm text-zinc-400">{copy.body}</p>
-        <Link href="/" className="mt-4 inline-block rounded-lg border border-zinc-600 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-blue-400">Go to dashboard</Link>
+        <span className="icon-well mx-auto mb-4"><Icon name="link" size={21} /></span>
+        <p className="eyebrow justify-center">{copy.tag}</p>
+        <h2 className="mt-3 font-serif text-3xl tracking-tight text-white">{copy.title}</h2>
+        <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">{copy.body}</p>
+        <Link href="/" className="button-secondary mt-5">Go to dashboard<Icon name="arrow" size={15} /></Link>
       </div>
     </div>
   );

@@ -45,9 +45,9 @@ export const LiveBoardPreview = memo(function LiveBoardPreview({
         return (
           <div
             key={square}
-            className={`relative aspect-square ${(row + col) % 2 ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'}`}
+            className={`relative aspect-square ${(row + col) % 2 ? 'board-dark' : 'board-light'}`}
           >
-            {highlighted && <span className="absolute inset-0 bg-yellow-300/35" />}
+            {highlighted && <span className="absolute inset-0 board-highlight" />}
           </div>
         );
       })}

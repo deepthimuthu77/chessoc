@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Piece } from './Piece';
+import { dropSquare } from '@/lib/board-input';
 
 export interface BoardPiece {
   char: string;
@@ -146,16 +147,21 @@ export const Board = memo(function Board({
 
   const handleDrop = useCallback((fromSquare: string, point: { x: number; y: number }) => {
     if (!boardRef.current || !interactive) return;
-    const rect = boardRef.current.getBoundingClientRect();
-    const x = point.x - rect.left;
-    const y = point.y - rect.top;
-    if (x < 0 || x >= rect.width || y < 0 || y >= rect.height) {
+    const board = boardRef.current;
+    const rect = board.getBoundingClientRect();
+    const scaleX = rect.width / board.offsetWidth;
+    const scaleY = rect.height / board.offsetHeight;
+    const square = dropSquare(point, {
+      left: rect.left + board.clientLeft * scaleX,
+      top: rect.top + board.clientTop * scaleY,
+      width: board.clientWidth * scaleX,
+      height: board.clientHeight * scaleY,
+    }, flip);
+    if (!square) {
       setSelectedSquare(null);
       return;
     }
-    const col = Math.floor((x / rect.width) * 8);
-    const row = Math.floor((y / rect.height) * 8);
-    attemptMove(fromSquare, squareAt(col, row, flip));
+    attemptMove(fromSquare, square);
   }, [interactive, flip, attemptMove]);
 
   return (
@@ -163,7 +169,7 @@ export const Board = memo(function Board({
       ref={boardRef}
       aria-label="Chess board"
       aria-busy={!!pendingMove}
-      className="relative isolate grid aspect-square w-full max-w-2xl grid-cols-8 grid-rows-8 overflow-hidden rounded-md border-[6px] border-zinc-900 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+      className="chess-board relative isolate grid aspect-square w-full max-w-2xl grid-cols-8 grid-rows-8 overflow-hidden"
     >
       {Array.from({ length: 64 }, (_, index) => {
         const row = Math.floor(index / 8);
@@ -197,11 +203,11 @@ export const Board = memo(function Board({
               dropMode ? onDropSquare?.(square)
                 : premoveMode ? handlePremoveClick(square)
                 : handleSquareActivate(square)}
-            className={`relative h-full w-full ${isDark ? 'bg-[#4b7399]' : 'bg-[#eae9d2]'} disabled:cursor-default`}
+            className={`relative h-full w-full ${isDark ? 'board-dark' : 'board-light'} disabled:cursor-default`}
           >
-            {isLast && <span className="pointer-events-none absolute inset-0 bg-yellow-300/30" />}
+            {isLast && <span className="pointer-events-none absolute inset-0 board-highlight" />}
             {(isPremove || isPremoveSel) && <span className="pointer-events-none absolute inset-0 bg-orange-400/40" />}
-            {isSelected && <span className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
+            {isSelected && <span className="pointer-events-none absolute inset-0 board-highlight" />}
             {isDrop && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="h-1/3 w-1/3 rounded-full bg-emerald-400/60 ring-2 ring-emerald-300/50" />

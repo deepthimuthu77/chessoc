@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, type Analysis, type GameReview, type ReviewBoard } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
 import { Board } from '@/components/ui/Board';
 import { Hand } from '@/components/ui/Hand';
 import { fenToPieces, lastMoveSquares, parseHand } from '@/lib/view-model';
@@ -32,22 +33,23 @@ export default function ReviewPage() {
   const bughouse = review?.variant === 'bughouse';
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
-      <div className="mx-auto max-w-[1500px] px-4 py-6 md:px-8">
-        <nav aria-label="Review navigation" className="mb-5 flex flex-wrap gap-5 text-sm font-semibold text-blue-300">
-          <Link href="/watch" className="hover:underline">Back to Watch</Link>
-          <Link href="/" className="hover:underline">Back to lobby</Link>
+      <div id="main-content" tabIndex={-1} className="page-wrap page-enter" style={{ maxWidth: 1480 }}>
+        <nav aria-label="Review navigation" className="mb-5 flex flex-wrap gap-5 text-sm font-semibold text-accent-300">
+          <Link href="/history" className="hover:underline">Your game collection</Link>
+          <Link href="/" className="hover:underline">Go to dashboard</Link>
           {review && <Link href={`/room/${encodeURIComponent(review.roomId || review.gameId)}`} className="hover:underline">Back to room</Link>}
         </nav>
-        <h1 className="text-2xl font-bold capitalize">{review?.variant ?? 'Game'} review</h1>
+        <PageHeading eyebrow="THE REVIEW ROOM" title="A closer look at every move." description={`${review?.variant ? review.variant[0].toUpperCase() + review.variant.slice(1) : 'Game'} review · Replay the story, explore a position, and find your next insight.`} />
         {!current && <p role="status" className="mt-6 text-zinc-400">Loading game…</p>}
         {current?.error && <p role="alert" className="mt-6 rounded-lg border border-rose-500/30 p-4 text-rose-300">{current.error} <button type="button" onClick={() => { setLoaded(null); setRetry((value) => value + 1); }} className="ml-3 underline">Retry</button></p>}
         {bughouse && <p className="mt-2 text-sm text-zinc-400">Each board has its own move controls. Pockets show the reserves recorded at that board’s selected move.</p>}
         {bughouse && boards.length < 2 && <p role="status" className="mt-3 text-amber-300">The other board’s history is unavailable.</p>}
-        <div className={`mt-6 grid items-start gap-8 ${bughouse ? 'xl:grid-cols-2' : 'mx-auto max-w-3xl'}`}>
+        <div className={`mt-6 grid items-start gap-8 ${bughouse ? 'xl:grid-cols-2' : 'mx-auto max-w-2xl'}`}>
           {boards.map((board) => <BoardReview key={`${params.id}:${board.gameId}`} board={board} variant={review!.variant} />)}
         </div>
+        <JourneyNav destinations={['play', 'history', 'watch']} />
       </div>
     </main>
   );
@@ -92,7 +94,7 @@ function BoardReview({ board, variant }: { board: ReviewBoard; variant: string }
     <section aria-label={`${title} review`} className="min-w-0">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold">{title}</h2>
-        <button type="button" onClick={() => setOrientation((value) => value === 'white' ? 'black' : 'white')} className="rounded border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800">Flip board</button>
+        <button type="button" onClick={() => setOrientation((value) => value === 'white' ? 'black' : 'white')} className="button-secondary">Flip board</button>
       </div>
       {dropVariant && fen && <ReviewPocket fen={fen} color={topColor} />}
       {fen ? <Board pieces={pieces} lastMove={lastMove} orientation={orientation} interactive={false} /> : <p role="alert" className="py-8 text-amber-300">The starting position is unavailable.</p>}
@@ -105,15 +107,15 @@ function BoardReview({ board, variant }: { board: ReviewBoard; variant: string }
         <NavBtn onClick={() => setIdx(board.plies.length)} label="⏭" name="Final position" disabled={clamped === board.plies.length} />
       </div>
       {fen && <div className="mt-4 flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-3">
-        <button type="button" onClick={analyze} disabled={analyzing} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-60">{analyzing ? 'Analyzing…' : 'Analyze position'}</button>
-        {current && <div className="flex flex-wrap items-center gap-3 text-sm"><span className="font-mono text-lg font-bold text-blue-400">{evalText}</span><span className="text-zinc-400">best <span className="font-mono text-zinc-300">{current.bestMove}</span> · depth {current.depth}</span></div>}
+        <button type="button" onClick={analyze} disabled={analyzing} className="button-primary">{analyzing ? 'Analyzing…' : 'Analyze position'}</button>
+        {current && <div className="flex flex-wrap items-center gap-3 text-sm"><span className="font-mono text-lg font-bold text-accent-400">{evalText}</span><span className="text-zinc-400">best <span className="font-mono text-zinc-300">{current.bestMove}</span> · depth {current.depth}</span></div>}
         {analysisError && <p role="alert" className="w-full text-center text-sm text-rose-300">{analysisError}</p>}
         {variant === 'bughouse' && <p className="w-full text-center text-xs text-zinc-400">Evaluates this board and its recorded reserve only; partner-board tactics are not included.</p>}
       </div>}
       <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
         <h3 className="border-b border-zinc-800 px-4 py-3 text-sm font-bold text-zinc-400">{title} moves</h3>
         <div className="flex max-h-56 flex-wrap gap-1 overflow-y-auto p-3">
-          {board.plies.map((ply, index) => <button key={`${ply.version}:${index}`} type="button" onClick={() => setIdx(index + 1)} aria-current={clamped === index + 1 ? 'step' : undefined} aria-label={`Move ${index + 1}: ${ply.uci}`} className={`rounded px-3 py-2 text-sm ${clamped === index + 1 ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-300 hover:bg-zinc-800'}`}><span className="mr-2 font-mono text-xs text-zinc-500">{index + 1}.</span>{ply.uci}</button>)}
+          {board.plies.map((ply, index) => <button key={`${ply.version}:${index}`} type="button" onClick={() => setIdx(index + 1)} aria-current={clamped === index + 1 ? 'step' : undefined} aria-label={`Move ${index + 1}: ${ply.uci}`} className={`rounded px-3 py-2 text-sm ${clamped === index + 1 ? 'bg-accent-500/15 text-accent-300' : 'text-zinc-300 hover:bg-zinc-800'}`}><span className="mr-2 font-mono text-xs text-zinc-500">{index + 1}.</span>{ply.uci}</button>)}
           {!board.plies.length && <p className="p-3 text-sm text-zinc-500">No moves were played.</p>}
         </div>
       </div>

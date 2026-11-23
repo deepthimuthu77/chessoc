@@ -14,6 +14,8 @@ import { MoveHistory } from '@/components/ui/MoveHistory';
 import { AccessiblePromotionPicker as PromotionPicker } from '@/components/ui/AccessiblePromotionPicker';
 import { useGame } from '@/hooks/use-game';
 import { ClockText } from '@/components/ui/ClockText';
+import { Icon } from '@/components/ui/Icon';
+import { FeatureLink } from '@/components/ui/PageHeading';
 
 const NO_DROP_TARGETS: string[] = [];
 
@@ -61,93 +63,39 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-slate-950 p-4 md:p-8">
+    <main className="room-shell min-h-screen px-4 py-5 md:px-8">
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
-      <div className="w-full max-w-7xl">
+      <div className="mx-auto max-w-[994px]">
         <RoomNavigation spectator={game.isSpectator} />
-        {game.isSpectator && <h1 className="mt-3 text-lg font-bold text-white">Watching {game.isCrazyhouse ? 'Crazyhouse' : 'Chess'}</h1>}
+        <header className="mb-5 mt-7 flex flex-wrap items-center justify-between gap-4">
+          <div><p className="eyebrow mb-2">{game.isSpectator ? 'THE LIVE GALLERY' : game.isVsEngine ? 'ENGINE PRACTICE' : 'AT THE BOARD'}</p><h1 className="font-serif text-3xl tracking-tight">{game.isCrazyhouse ? 'Crazyhouse' : 'Chess'}<span className="ml-3 text-sm font-normal text-zinc-500">{game.isSpectator ? 'Live room' : game.isVsEngine ? 'A worthy opponent awaits.' : 'A game between friends.'}</span></h1></div>
+          <span role="status" className="live-pill"><span className="live-dot" />{game.result ? 'Game complete' : game.status !== 'connected' ? 'Connecting' : game.pendingMove ? 'Sending move' : game.interactive ? 'Your move' : game.seatsFilled < 2 ? 'Waiting for a player' : game.isSpectator ? 'Watching live' : 'Opponent’s move'}</span>
+        </header>
         {game.result && <FinishedGame reviewId={game.reviewId} onShowResult={() => setDismissedRoom(null)} />}
-      </div>
-      <div className="flex w-full max-w-7xl flex-col items-center justify-center gap-8 xl:flex-row xl:items-start xl:gap-12">
-        <div className="order-2 flex w-full max-w-md flex-col space-y-6 xl:order-1 xl:w-80">
-          <PlayerPanel label={game.isSpectator ? 'Black' : 'Opponent'} name={game.color === 'black' ? game.whiteName : game.blackName} clock={roomClock(game, game.color === 'black' ? 'white' : 'black')} captured={game.opponent.captured} score={game.opponent.score} />
-          {game.isDropVariant && <Hand pieces={game.oppHand} />}
-          <MoveHistory history={game.history} />
-          {game.isDropVariant && (
-            <Hand
-              pieces={game.yourHand}
-              selected={selectedDrop}
-              interactive={game.interactive}
-              onSelect={(p) => setSelectedDrop((cur) => (cur === p ? null : p))}
-            />
-          )}
-          <PlayerPanel label={game.isSpectator ? 'White' : 'You'} name={game.color === 'black' ? game.blackName : game.whiteName} clock={roomClock(game, game.color === 'black' ? 'black' : 'white')} captured={game.you.captured} score={game.you.score} highlighted={!game.isSpectator} />
-          <GameControls
-            active={game.active}
-            canAbort={game.canAbort}
-            canOfferDraw={game.canOfferDraw}
-            showDraw={!game.isVsEngine}
-            drawOffer={game.drawOffer}
-            requireConfirm={game.confirmResign}
-            onResign={game.resign}
-            onAbort={game.abort}
-            onOfferDraw={game.offerDraw}
-            onRespondDraw={game.respondDraw}
-          />
-          {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />}
-        </div>
-
-        <div className="order-1 relative flex w-full max-w-2xl flex-col items-center xl:order-2">
-          <Board
-            pieces={game.pieces}
-            pendingMove={game.pendingMove}
-            legalMoves={game.legalMoves}
-            lastMove={game.lastMove}
-            checkSquare={game.checkSquare}
-            orientation={game.orientation}
-            interactive={game.interactive}
-            onMoveIntent={game.sendMove}
-            dropTargets={dropTargets}
-            onDropSquare={onDropSquare}
-            allowPremove={game.allowPremove}
-            myColor={game.color}
-            premove={game.premove}
-            onPremove={game.setPremove}
-          />
-          {!game.connected && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
-              <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-8 py-6 text-center shadow-2xl">
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Game unavailable</p>
-                <h1 className="mt-2 text-2xl font-bold text-white">
-                  {game.error ? 'Unable to join this game' : 'Waiting for the server transport'}
-                </h1>
-                <p className="mt-2 max-w-sm text-sm text-zinc-400">
-                  {game.error ?? 'The board remains read-only until an authenticated server projection arrives.'}
-                </p>
-                {game.error?.includes('session expired') && <Link href={`/login?reason=session-expired&next=${encodeURIComponent(`/room/${params.id}`)}`} className="mt-4 inline-block text-blue-400 underline">Sign in to return to this room</Link>}
-                <Link href="/" className="mt-4 block font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
-              </div>
+        {!game.result && !game.isVsEngine && !game.isSpectator && game.seatsFilled < 2 && <div className="mb-5"><InviteLinks roomId={game.roomId} availableSeats={[]} /></div>}
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_290px] xl:gap-8">
+          <section className="min-w-0" aria-label="Game board and players">
+            <PlayerPanel label={game.isSpectator ? 'Black' : 'Opponent'} name={game.color === 'black' ? game.whiteName : game.blackName} clock={roomClock(game, game.color === 'black' ? 'white' : 'black')} captured={game.opponent.captured} score={game.opponent.score} />
+            {game.isDropVariant && <div className="my-3"><Hand pieces={game.oppHand} /></div>}
+            <div className="relative my-3 w-full">
+              <Board pieces={game.pieces} pendingMove={game.pendingMove} legalMoves={game.legalMoves} lastMove={game.lastMove} checkSquare={game.checkSquare} orientation={game.orientation} interactive={game.interactive} onMoveIntent={game.sendMove} dropTargets={dropTargets} onDropSquare={onDropSquare} allowPremove={game.allowPremove} myColor={game.color} premove={game.premove} onPremove={game.setPremove} />
+              {!game.connected && <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/65 p-5 backdrop-blur-sm"><div className="surface px-6 py-7 text-center"><span className="icon-well mx-auto mb-4"><Icon name="board" /></span><p className="eyebrow justify-center">Game unavailable</p><h2 className="mt-3 font-serif text-2xl">{game.error ? 'Unable to join this game' : 'Preparing your board'}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">{game.error ?? 'Connecting to your game. You’ll be ready to play in a moment.'}</p>{game.error?.includes('session expired') && <Link href={`/login?reason=session-expired&next=${encodeURIComponent(`/room/${params.id}`)}`} className="text-link mt-4">Sign in to return</Link>}<Link href="/" className="button-secondary mt-5">Go to dashboard<Icon name="arrow" size={15} /></Link></div></div>}
+              {game.connected && !game.result && (game.seatsFilled < 2 ? <WaitingOverlay joined={game.seatsFilled} target={2} /> : <ConnectionOverlay status={game.status} />)}
+              <PromotionPicker open={!!game.promotion && !game.result} color={game.promotionColor} onPick={game.choosePromotion} onCancel={game.cancelPromotion} />
             </div>
-          )}
-          {game.connected && !game.result && <ConnectionOverlay status={game.status} />}
-          <GameOverModal
-            isOpen={!!game.result && dismissedRoom !== params.id}
-            result={game.result}
-            onRematch={game.canRematch ? game.rematch : undefined}
-            rematchPending={game.rematchPending}
-            error={game.error ?? (game.status !== 'connected' ? 'Connection lost. Return to the dashboard to start another game.' : undefined)}
-            onDismiss={() => setDismissedRoom(params.id)}
-            reviewHref={`/review/${encodeURIComponent(game.reviewId)}`}
-            isSpectator={game.isSpectator}
-          />
-          <PromotionPicker
-            open={!!game.promotion && !game.result}
-            color={game.promotionColor}
-            onPick={game.choosePromotion}
-            onCancel={game.cancelPromotion}
-          />
+            {game.isDropVariant && <div className="my-3"><Hand pieces={game.yourHand} selected={selectedDrop} interactive={game.interactive} onSelect={piece => setSelectedDrop(current => current === piece ? null : piece)} /></div>}
+            <PlayerPanel label={game.isSpectator ? 'White' : 'You'} name={game.color === 'black' ? game.blackName : game.whiteName} clock={roomClock(game, game.color === 'black' ? 'black' : 'white')} captured={game.you.captured} score={game.you.score} highlighted={!game.isSpectator} />
+            {game.premove && <p className="mt-3 text-center text-xs text-zinc-400">Premove queued · <button type="button" onClick={game.clearPremove} className="text-accent-300 underline">Cancel</button></p>}
+          </section>
+          <aside className="grid gap-4" aria-label="Game details">
+            <MoveHistory history={game.history} />
+            <GameControls active={game.active} canAbort={game.canAbort} canOfferDraw={game.canOfferDraw} showDraw={!game.isVsEngine} drawOffer={game.drawOffer} requireConfirm={game.confirmResign} onResign={game.resign} onAbort={game.abort} onOfferDraw={game.offerDraw} onRespondDraw={game.respondDraw} />
+            {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} disabled={game.status !== 'connected'} />}
+            <div className="surface p-3"><FeatureLink href="/watch" icon="watch" title="The live gallery" detail="See what’s happening across the club." /><FeatureLink href="/history" icon="history" title="Your game collection" detail="Every finished game, ready to revisit." /></div>
+          </aside>
         </div>
       </div>
+      <GameOverModal isOpen={!!game.result && dismissedRoom !== params.id} result={game.result} onRematch={game.canRematch ? game.rematch : undefined} rematchPending={game.rematchPending} error={game.error ?? (game.status !== 'connected' ? 'Connection lost. Return to the dashboard to start another game.' : undefined)} onDismiss={() => setDismissedRoom(params.id)} reviewHref={`/review/${encodeURIComponent(game.reviewId)}`} isSpectator={game.isSpectator} />
     </main>
   );
 }
@@ -198,7 +146,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
   }, [selectedDrop, dropTargets, sendDrop]);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-5 text-white lg:px-8">
+    <main className="room-shell min-h-screen px-4 py-5 text-white lg:px-8">
       <div className="mx-auto mb-4 max-w-[1680px]">
         <RoomNavigation spectator={game.isSpectator} />
         {game.result && <FinishedGame reviewId={game.reviewId} onShowResult={() => setDismissed(false)} />}
@@ -208,7 +156,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">Bughouse</h1>
             <span className={`rounded px-2 py-1 text-xs font-bold uppercase ${
-              game.isSpectator ? 'bg-zinc-800 text-zinc-300' : game.team === 'blue' ? 'bg-blue-500/15 text-blue-300' : 'bg-rose-500/15 text-rose-300'
+              game.isSpectator ? 'bg-zinc-800 text-zinc-300' : game.team === 'blue' ? 'bg-sky-500/15 text-sky-300' : 'bg-rose-500/15 text-rose-300'
             }`}>
               {game.isSpectator ? 'Spectating' : `Team ${game.team}`}
             </span>
@@ -305,9 +253,9 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
 }
 
 function RoomNavigation({ spectator }: { spectator: boolean }) {
-  return <nav aria-label="Room navigation" className="flex flex-wrap gap-5 text-sm font-semibold text-blue-300">
-    {spectator && <Link href="/watch" className="hover:underline">← Back to Watch</Link>}
-    <Link href="/" className="hover:underline">Go to dashboard</Link>
+  return <nav aria-label="Room navigation" className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+    <Link href="/" className="wordmark" aria-label="Chessoc home"><Icon name="knight" size={26} />chessoc.</Link>
+    <div className="flex flex-wrap items-center gap-1">{spectator && <Link href="/watch" className="button-quiet"><Icon name="watch" size={15} />Back to Watch</Link>}<Link href="/" className="button-secondary"><Icon name="board" size={15} />Go to dashboard</Link></div>
   </nav>;
 }
 
@@ -317,17 +265,17 @@ function roomClock(game: ReturnType<typeof useGame>, color: 'white' | 'black', p
 }
 
 function FinishedGame({ reviewId, onShowResult }: { reviewId: string; onShowResult: () => void }) {
-  return <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
+  return <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
     <span>Game finished · Final position</span>
-    <Link href={`/review/${encodeURIComponent(reviewId)}`} className="font-semibold text-blue-300 hover:underline">Review game</Link>
-    <button type="button" onClick={onShowResult} className="font-semibold text-blue-300 hover:underline">Show result</button>
+    <Link href={`/review/${encodeURIComponent(reviewId)}`} className="font-semibold text-accent-300 hover:underline">Review game</Link>
+    <button type="button" onClick={onShowResult} className="font-semibold text-accent-300 hover:underline">Show result</button>
   </div>;
 }
 
 function UnavailableBoard({ error }: { error?: string | null }) {
   return <div role="status" className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-slate-950/75 p-6 text-center text-sm text-zinc-300">
     <p>{error ?? 'Connecting to board…'}</p>
-    <Link href="/" className="font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
+    <Link href="/" className="font-semibold text-accent-300 hover:underline">Go to dashboard</Link>
   </div>;
 }
 
@@ -363,7 +311,7 @@ function InviteLinks({ roomId, availableSeats }: { roomId: string; availableSeat
           key={seat}
           type="button"
           onClick={() => copySeat(seat)}
-          className="border border-blue-500/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10"
+          className="button-secondary"
         >
           {copied === seat ? 'Copied' : `Invite ${SEAT_LABELS[seat] ?? seat}`}
         </button>
@@ -371,7 +319,7 @@ function InviteLinks({ roomId, availableSeats }: { roomId: string; availableSeat
       <button
         type="button"
         onClick={() => copySeat()}
-        className="border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900"
+        className="button-secondary"
       >
         {copied === 'room' ? 'Copied' : availableSeats.length > 0 ? 'Copy open-seat link' : 'Copy room link'}
       </button>
@@ -396,7 +344,7 @@ function BoardLabel({
   return (
     <div className="flex items-center justify-between py-3">
       <div>
-        <span className={`text-xs font-bold uppercase ${active ? 'text-blue-400' : 'text-zinc-500'}`}>{title}</span>
+        <span className={`text-xs font-bold uppercase ${active ? 'text-accent-400' : 'text-zinc-500'}`}>{title}</span>
         <p className="text-sm font-medium text-zinc-300">{subtitle}</p>
       </div>
       <span className="font-mono text-2xl text-zinc-200">{clock}</span>
@@ -407,10 +355,11 @@ function BoardLabel({
 function WaitingOverlay({ joined, target }: { joined: number; target: number }) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm">
-      <div className="border border-zinc-700 bg-zinc-950 px-6 py-4 text-center shadow-2xl">
-        <p className="text-sm font-bold text-white">Waiting for players</p>
+      <div className="surface mx-5 px-6 py-6 text-center">
+        <span className="icon-well mx-auto mb-4"><Icon name="people" /></span>
+        <p className="font-serif text-2xl text-white">Waiting for players</p>
         <p className="mt-1 text-xs text-zinc-400">{joined}/{target} human seats filled</p>
-        <Link href="/" className="mt-4 inline-block text-sm font-semibold text-blue-300 hover:underline">Go to dashboard</Link>
+        <Link href="/" className="button-secondary mt-4">Go to dashboard</Link>
       </div>
     </div>
   );
@@ -433,18 +382,16 @@ function PlayerPanel({
 }) {
   return (
     <div
-      className={`flex flex-col rounded-2xl border bg-zinc-900 p-6 shadow-xl ${
-        highlighted ? 'border-blue-500/30' : 'border-zinc-800'
-      }`}
+      className={`player-panel flex flex-row items-center justify-between gap-4 ${highlighted ? 'is-you' : ''}`}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <span className={`mb-1 block text-xs font-bold uppercase tracking-wider ${highlighted ? 'text-blue-400' : 'text-zinc-500'}`}>
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
+        <div className="min-w-0">
+          <span className={`mb-1 block text-xs font-bold uppercase tracking-wider ${highlighted ? 'text-accent-400' : 'text-zinc-500'}`}>
             {label}
           </span>
-          <span className="text-xl font-medium text-zinc-500">{name}</span>
+          <span className="block truncate text-sm font-medium text-zinc-200">{name}</span>
         </div>
-        <div className="font-mono text-3xl text-zinc-600">{clock}</div>
+        <div className="clock-value shrink-0 font-mono">{clock}</div>
       </div>
       <CapturedPieces pieces={captured} score={score} />
     </div>

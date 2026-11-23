@@ -7,7 +7,7 @@ const LABEL: Record<string, string> = { white: 'White', black: 'Black', spectato
 const COLOR: Record<string, string> = {
   white: 'text-zinc-200',
   black: 'text-zinc-400',
-  spectator: 'text-blue-400',
+  spectator: 'text-accent-400',
 };
 
 export function Chat({ messages, onSend, disabled = false }: { messages: ChatMessage[]; onSend: (text: string) => void; disabled?: boolean }) {
@@ -29,9 +29,9 @@ export function Chat({ messages, onSend, disabled = false }: { messages: ChatMes
   }
 
   return (
-    <div className="flex h-56 w-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
-      <div className="border-b border-zinc-800 bg-zinc-950 p-3">
-        <h3 className="text-center text-sm font-bold uppercase tracking-widest text-zinc-400">Chat</h3>
+    <div className="surface flex h-56 w-full flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
+        <h3 className="text-xs font-medium text-zinc-200">At the table</h3><span className="text-[10px] text-zinc-500">Room chat</span>
       </div>
       <div ref={scrollRef} className="flex-1 space-y-1 overflow-y-auto p-3">
         {messages.length === 0 ? (
@@ -53,7 +53,7 @@ export function Chat({ messages, onSend, disabled = false }: { messages: ChatMes
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={disabled ? 'Reconnect to send messages' : 'Message…'}
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-accent-500"
         />
       </form>
     </div>

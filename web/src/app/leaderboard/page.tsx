@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, type LeaderboardRow } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
 
 export default function LeaderboardPage() {
   const { account, token, logout, ready, handleAuthError, authError, retryAuth } = useAuth();
@@ -31,12 +32,13 @@ export default function LeaderboardPage() {
   }, [scope, token, ready, variant, speed, key, handleAuthError]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
 
-      <div className="mx-auto max-w-3xl px-6 py-12">
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
+        <PageHeading eyebrow="THE CLUB RANKINGS" title="A little friendly ambition." description="Find your benchmark across variants and time controls. Every pool is a new way to grow." />
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-black tracking-tighter">Leaderboard</h1>
+          <h2 className="text-sm font-medium">Choose your field</h2>
           <div className="flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
             <Tab active={scope === 'global'} onClick={() => setScope('global')}>Global</Tab>
             {(token || scope === 'friends') && <Tab active={scope === 'friends'} onClick={() => setScope('friends')}>Friends</Tab>}
@@ -59,7 +61,7 @@ export default function LeaderboardPage() {
         </div>
         <p className="mb-4 text-sm capitalize text-zinc-400">{scope} · {variant} · {speed}</p>
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
+        <div className="surface overflow-hidden">
           {ready && scope === 'friends' && !token ? (
             <Empty><Link href="/login" className="underline">Sign in to view the friends leaderboard.</Link></Empty>
           ) : loading ? (
@@ -73,19 +75,20 @@ export default function LeaderboardPage() {
               <div
                 key={row.accountId}
                 className={`flex items-center gap-4 border-b border-zinc-800/70 px-6 py-3 last:border-0 ${
-                  row.accountId === account?.id ? 'bg-blue-500/5' : ''
+                  row.accountId === account?.id ? 'bg-accent-500/5' : ''
                 }`}
               >
                 <span className="w-8 font-mono text-sm text-zinc-500">{row.rank}</span>
-                <Link href={`/profile/${row.accountId}`} className="flex-1 font-medium text-zinc-100 hover:text-blue-400">
+                <Link href={`/profile/${row.accountId}`} className="flex-1 font-medium text-zinc-100 hover:text-accent-400">
                   {row.username}
                 </Link>
                 <span className="w-16 text-right text-xs text-zinc-500">{row.games} games</span>
-                <span className="w-16 text-right font-bold text-blue-400">{row.rating}</span>
+                <span className="w-16 text-right font-bold text-accent-400">{row.rating}</span>
               </div>
             ))
           )}
         </div>
+        <JourneyNav destinations={['play', 'friends', 'history']} />
       </div>
     </main>
   );
@@ -98,7 +101,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
       aria-pressed={active}
       onClick={onClick}
       className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
-        active ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+        active ? 'bg-zinc-800 text-accent-400' : 'text-zinc-400 hover:text-zinc-200'
       }`}
     >
       {children}

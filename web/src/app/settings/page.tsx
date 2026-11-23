@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
+import { Icon } from '@/components/ui/Icon';
 import { getSettings, setSettings, type Settings } from '@/lib/settings';
 
 /* eslint-disable react-hooks/set-state-in-effect */
@@ -94,20 +96,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="mb-6 text-3xl font-black tracking-tighter">Settings</h1>
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
+        <PageHeading eyebrow="MAKE IT YOURS" title="A game that feels like you." description="Fine-tune the details, from the sound of a move to the way your board responds." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
         {settingsError && <p role="alert" className="mb-4 text-rose-400">{settingsError}</p>}
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
+        <div className="surface overflow-hidden"><div className="flex items-center gap-3 border-b border-zinc-800 px-6 py-5"><span className="icon-well"><Icon name="settings" size={18} /></span><div><h2 className="text-sm font-medium">Your playing experience</h2><p className="mt-1 text-xs text-zinc-500">Preferences are saved on this device.</p></div></div>
           {TOGGLES.map((t) => (
-            <div key={t.key} className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-4 last:border-0">
+            <div key={t.key} className="flex items-center justify-between gap-5 border-b border-zinc-800/70 px-6 py-4 last:border-0">
               <div>
                 <div id={`${t.key}-label`} className="font-medium text-zinc-100">{t.label}</div>
-                <div id={`${t.key}-help`} className="text-xs text-zinc-500">{t.help}</div>
+                <div id={`${t.key}-help`} className="mt-1 text-xs leading-relaxed text-zinc-500">{t.help}</div>
               </div>
               <button
                 type="button"
@@ -116,7 +118,7 @@ export default function SettingsPage() {
                 aria-describedby={`${t.key}-help`}
                 aria-checked={settings[t.key]}
                 onClick={() => toggle(t.key)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${settings[t.key] ? 'bg-blue-600' : 'bg-zinc-700'}`}
+                className={`relative h-6 w-11 rounded-full transition-colors ${settings[t.key] ? 'bg-accent-600' : 'bg-zinc-700'}`}
               >
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${settings[t.key] ? 'left-[22px]' : 'left-0.5'}`} />
               </button>
@@ -126,9 +128,9 @@ export default function SettingsPage() {
 
         <h2 className="mb-3 mt-10 text-xs font-bold uppercase tracking-wider text-zinc-500">Account</h2>
         {isGuest ? (
-          <div className="border border-blue-500/30 bg-blue-500/10 p-6">
+          <div className="surface p-6">
             <p className="text-sm text-zinc-300">Create an account to keep your games and manage a password.</p>
-            <Link href="/upgrade" className="mt-4 inline-block bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-500">
+            <Link href="/upgrade" className="button-primary mt-4">
               Create account
             </Link>
           </div>
@@ -145,7 +147,7 @@ export default function SettingsPage() {
             value={oldPw}
             onChange={(e) => setOldPw(e.target.value)}
             placeholder="Current password"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
           <label htmlFor="new-password" className="text-sm text-zinc-300">New password</label>
           <input
@@ -159,9 +161,9 @@ export default function SettingsPage() {
             value={newPw}
             onChange={(e) => setNewPw(e.target.value)}
             placeholder="New password"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
-          <button type="submit" disabled={!!busy || !oldPw || newPw.length < 6} className="self-start rounded-xl bg-blue-600 px-5 py-2 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+          <button type="submit" disabled={!!busy || !oldPw || newPw.length < 6} className="self-start rounded-xl bg-accent-600 px-5 py-2 font-bold text-white transition-colors hover:bg-accent-500 disabled:opacity-50">
             {busy === 'password' ? 'Changing password…' : 'Change password'}
           </button>
           {pwMsg && <p role={pwError ? 'alert' : 'status'} className={pwError ? 'text-sm text-rose-400' : 'text-sm text-zinc-300'}>{pwMsg}</p>}
@@ -193,6 +195,7 @@ export default function SettingsPage() {
           {delMsg && <p role="alert" className="text-sm text-rose-400">{delMsg}</p>}
         </form>
         </>}
+        <JourneyNav />
       </div>
     </main>
   );

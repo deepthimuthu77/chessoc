@@ -5,6 +5,9 @@ import { useParams } from 'next/navigation';
 import { api, type Profile, type RatingPoint } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { JourneyNav } from '@/components/ui/PageHeading';
+import { Icon } from '@/components/ui/Icon';
+import Link from 'next/link';
 import { RatingChart } from '@/components/ui/RatingChart';
 
 export default function ProfilePage() {
@@ -76,10 +79,10 @@ function ProfileContent({ id }: { id: string }) {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
 
-      <div className="mx-auto max-w-2xl px-6 py-12">
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter"><p className="eyebrow mb-5">THE PLAYER BEHIND THE MOVES</p>
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
         {loading ? (
           <p role="status" className="text-center text-zinc-400">Loading profile…</p>
@@ -87,13 +90,13 @@ function ProfileContent({ id }: { id: string }) {
           <div role="alert" className="text-center text-rose-400"><p>Could not load profile: {result.error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-3 underline">Retry profile</button></div>
         ) : !profile ? null : (
           <>
-            <div className="mb-8 flex items-center justify-between">
+            <div className="surface mb-7 flex flex-wrap items-center justify-between gap-5 p-7">
               <div>
-                <h1 className="text-4xl font-black tracking-tighter">{profile.account.username}</h1>
+                <h1 className="page-title break-all">{profile.account.username}</h1>
                 <p className="mt-1 text-zinc-500">Standard · Blitz rating</p>
               </div>
               <div className="text-right">
-                <div className="text-5xl font-black text-blue-400">{profile.rating}</div>
+                <div className="font-mono text-4xl font-medium text-accent-300">{profile.rating}</div>
               </div>
             </div>
 
@@ -102,12 +105,12 @@ function ProfileContent({ id }: { id: string }) {
                 type="button"
                 disabled={adding || !!friendNote}
                 onClick={addFriend}
-                className="mb-8 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
+                className="mb-8 rounded-xl bg-accent-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-accent-500 disabled:opacity-60"
               >
                 {adding ? 'Sending…' : friendNote ?? 'Add friend'}
               </button>
             )}
-            {friendNote && <p role="status" className="mb-4 text-blue-400">{friendNote}</p>}
+            {friendNote && <p role="status" className="mb-4 text-accent-400">{friendNote}</p>}
             {friendError && <p role="alert" className="mb-4 text-rose-400">{friendError} Use Add friend to retry.</p>}
 
             <div className="grid grid-cols-3 gap-4">
@@ -129,12 +132,12 @@ function ProfileContent({ id }: { id: string }) {
                         aria-pressed={on}
                         onClick={() => setPool({ variant: p.variant, speed: p.speed })}
                         className={`flex w-full items-center justify-between border-b border-zinc-800/70 px-6 py-3 text-left transition-colors last:border-0 ${
-                          on ? 'bg-blue-500/10' : 'hover:bg-zinc-800/40'
+                          on ? 'bg-accent-500/10' : 'hover:bg-zinc-800/40'
                         }`}
                       >
                         <span className="capitalize text-zinc-300">{p.variant} · {p.speed}</span>
                         <span className="flex-1 px-4 text-right text-xs text-zinc-500">{p.games} games</span>
-                        <span className="w-16 text-right font-bold text-blue-400">{p.rating}</span>
+                        <span className="w-16 text-right font-bold text-accent-400">{p.rating}</span>
                       </button>
                     );
                   })}
@@ -152,9 +155,10 @@ function ProfileContent({ id }: { id: string }) {
                 )}
               </div>
             )}
-            {profile.pools.length === 0 && <p className="mt-8 text-zinc-400">No rated games yet.</p>}
+            {profile.pools.length === 0 && <div className="empty-state surface mt-7"><span className="icon-well"><Icon name="trophy" /></span><h2>A story still being written.</h2><p>Ratings and progress will appear here after rated games.</p><Link href="/?opponent=friend#create-game" className="button-secondary">Create a rated game<Icon name="arrow" size={15} /></Link></div>}
           </>
         )}
+        <JourneyNav destinations={['play', 'leaderboard', 'friends']} />
       </div>
     </main>
   );
@@ -162,8 +166,8 @@ function ProfileContent({ id }: { id: string }) {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-      <span className={`text-3xl font-black ${accent}`}>{value}</span>
+    <div className="flex flex-col items-center rounded-2xl border border-zinc-800 bg-zinc-900 px-3 py-5 sm:p-6">
+      <span className={`text-3xl font-semibold ${accent}`}>{value}</span>
       <span className="mt-1 text-xs font-bold uppercase tracking-wider text-zinc-500">{label}</span>
     </div>
   );

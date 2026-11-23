@@ -33,9 +33,9 @@ export function PromotionPicker({ open, color, onPick, onCancel }: PromotionPick
             exit={{ scale: 0.9, y: 20 }}
             initial={{ scale: 0.9, y: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="mx-4 flex flex-col items-center rounded-3xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl"
+            className="mx-4 flex flex-col items-center rounded-2xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl"
           >
-            <span className="mb-6 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">
+            <span className="mb-6 text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
               Promote to
             </span>
             <div className="flex gap-3">
@@ -45,7 +45,7 @@ export function PromotionPicker({ open, color, onPick, onCancel }: PromotionPick
                   type="button"
                   aria-label={`promote to ${piece}`}
                   onClick={() => onPick(piece)}
-                  className="h-16 w-16 rounded-xl border border-zinc-700 bg-zinc-800 p-1 transition-colors hover:border-blue-500 hover:bg-zinc-700"
+                  className="h-16 w-16 rounded-xl border border-zinc-700 bg-zinc-800 p-1 transition-colors hover:border-accent-500 hover:bg-zinc-700"
                 >
                   <div
                     className="h-full w-full"

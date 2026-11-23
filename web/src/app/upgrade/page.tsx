@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
+import { Icon } from '@/components/ui/Icon';
 
 export default function UpgradePage() {
   const { account, ready, isGuest, upgrade, logout } = useAuth(true);
@@ -35,50 +37,57 @@ export default function UpgradePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
-      <div className="mx-auto max-w-md px-6 py-12">
-        <h1 className="mb-2 text-3xl font-black tracking-tighter">Create your account</h1>
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
+        <PageHeading eyebrow="A PLACE TO BELONG" title="Make yourself at home." description="Keep your guest progress, your games, and your place at the table." />
         {isGuest ? (
           <p className="mb-6 text-sm text-zinc-500">Keep the games and ratings from your guest session.</p>
         ) : (
           <p className="mb-6 text-sm text-amber-400">You already have a registered account.</p>
         )}
 
-        <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <form onSubmit={submit} className="surface flex max-w-xl flex-col gap-4 p-6"><div className="mb-2 flex items-center gap-3"><span className="icon-well"><Icon name="knight" size={20} /></span><h2 className="text-sm font-medium">Your next chapter</h2></div>
+          <label className="field-label" htmlFor="join-username">Username</label>
           <input
+            id="join-username"
             aria-label="Username" required minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" autoComplete="username" disabled={busy || !isGuest}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
+          <label className="field-label" htmlFor="join-email">Email</label>
           <input
+            id="join-email"
             type="email"
             aria-label="Email" required autoComplete="email" disabled={busy || !isGuest}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
+          <label className="field-label" htmlFor="join-password">Password</label>
           <input
+            id="join-password"
             type="password"
             aria-label="Password" required minLength={6} autoComplete="new-password" disabled={busy || !isGuest}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
           {error && <p role="alert" className="text-sm font-medium text-rose-400">{error}</p>}
           <button
             type="submit"
             disabled={busy || !isGuest}
-            className="rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
+            className="button-primary mt-2"
           >
             {busy ? 'Saving…' : 'Create account'}
           </button>
         </form>
+        <JourneyNav />
       </div>
     </main>
   );

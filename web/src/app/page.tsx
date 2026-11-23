@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, type ActiveGame, type OpenGame } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
-import { prefersReducedMotion } from '@/lib/settings';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { FeatureLink } from '@/components/ui/PageHeading';
 
 const TIME_CONTROLS = [
   { label: '1+0', minutes: 1, increment: 0, tag: 'Bullet' },
@@ -16,7 +16,11 @@ const TIME_CONTROLS = [
   { label: '10+5', minutes: 10, increment: 5, tag: 'Rapid' },
 ];
 
-const VARIANTS = ['standard', 'crazyhouse', 'bughouse'];
+const VARIANTS: { id: string; title: string; description: string; icon: IconName }[] = [
+  { id: 'standard', title: 'Chess', description: 'The timeless original.', icon: 'knight' },
+  { id: 'crazyhouse', title: 'Crazyhouse', description: 'Every capture, a new possibility.', icon: 'sparkle' },
+  { id: 'bughouse', title: 'Bughouse', description: 'Two boards. One team.', icon: 'layers' },
+];
 
 const BUGHOUSE_SEATS = [
   { code: 'aw', board: 'A', color: 'White', team: 'Blue' },
@@ -31,11 +35,23 @@ function defaultBughouseSeats(color: 'white' | 'black', count: number) {
 }
 
 export default function HomePage() {
-  const { account, token, ready, isGuest, logout } = useAuth(true);
+  return <Suspense fallback={<main className="min-h-screen app-background p-8"><p role="status" className="text-sm text-zinc-400">Preparing your table…</p></main>}><DashboardRoute /></Suspense>;
+}
+
+function DashboardRoute() {
+  const query = useSearchParams();
+  const mode = query.get('opponent');
+  const variant = query.get('variant');
+  return <Dashboard key={query.toString()} initialOpponent={mode === 'friend' || mode === 'match' ? mode : 'computer'} initialVariant={VARIANTS.some(option => option.id === variant) ? variant! : 'standard'} />;
+}
+
+function Dashboard({ initialOpponent, initialVariant }: { initialOpponent: 'computer' | 'friend' | 'match'; initialVariant: string }) {
+  const { account, token, ready, isGuest, logout, authError, retryAuth } = useAuth(true);
   const router = useRouter();
   const [tc, setTc] = useState(TIME_CONTROLS[2]);
-  const [variant, setVariant] = useState('standard');
-  const [rated, setRated] = useState(true);
+  const [variant, setVariant] = useState(initialVariant);
+  const [opponent, setOpponent] = useState(initialOpponent);
+  const [rated, setRated] = useState(initialVariant !== 'bughouse');
   const [color, setColor] = useState<'white' | 'black'>('white');
   const [bughouseHumans, setBughouseHumans] = useState(1);
   const [bughouseSeats, setBughouseSeats] = useState<string[]>(['aw']);
@@ -108,7 +124,7 @@ export default function HomePage() {
   }, [searching, token, router]);
 
   if (!ready || !account || !token) {
-    return <main className="min-h-screen bg-slate-950" />;
+    return <main className="app-background flex min-h-screen flex-col items-center justify-center gap-5 p-6 text-center"><span className="icon-well"><Icon name="knight" /></span><h1 className="page-title">Preparing your table.</h1><p role={authError ? 'alert' : 'status'} className="max-w-sm text-sm leading-relaxed text-zinc-400">{authError ?? 'Getting your playing session ready…'}</p>{authError && <button type="button" className="button-secondary" onClick={() => void retryAuth()}>Try again</button>}<Link href="/watch" className="text-link">Visit the live gallery<Icon name="arrow" size={15} /></Link></main>;
   }
 
   async function create(extra: {
@@ -201,373 +217,72 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
-
-      <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-        <motion.div initial={prefersReducedMotion() ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-4xl font-black tracking-tighter">
-            Welcome, <span className="text-blue-400">{account.username}</span>
-          </h1>
-          <p className="mt-1 text-zinc-500">Choose a time control, then pick an opponent.</p>
-        </motion.div>
-
-        {isGuest && (
-          <Link
-            href="/upgrade"
-            className="flex flex-col items-start gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-6 py-4 transition-colors hover:bg-blue-500/15 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <span className="text-sm text-zinc-200">
-              You&apos;re playing as a guest. Create an account to save your games and ratings.
-            </span>
-            <span className="text-sm font-bold text-blue-400">Create account →</span>
-          </Link>
-        )}
-
-        {active.length > 0 && (
-          <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-            <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Continue playing</h2>
-            <div className="flex flex-col gap-2">
-              {active.map((g) => (
-                <button
-                  key={g.gameId}
-                  type="button"
-                  onClick={() => router.push(`/room/${g.gameId}`)}
-                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left transition-colors hover:border-zinc-700"
-                >
-                  <span className="flex min-w-0 flex-col gap-0.5 text-zinc-200">
-                    <span className="truncate">vs {g.opponent}</span>
-                    <span className="text-xs capitalize text-zinc-500">
-                      {g.variant} · {g.minutes}+{g.increment} · {g.color}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold text-blue-400">Resume</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {(listError || activeError) && <p role="alert" className="text-sm text-amber-300">Game lists unavailable: {activeError || listError} <button type="button" className="underline" onClick={() => { setListError(null); setActiveError(null); setListRetry((value) => value + 1); }}>Retry</button></p>}
-
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-          <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Time control</h2>
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {TIME_CONTROLS.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => setTc(option)}
-                aria-pressed={tc.label === option.label}
-                className={`flex flex-col items-center rounded-2xl border px-4 py-4 transition-colors ${
-                  tc.label === option.label
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700'
-                }`}
-              >
-                <span className="text-2xl font-bold">{option.label}</span>
-                <span className="mt-1 text-xs font-medium uppercase tracking-wider text-zinc-500">{option.tag}</span>
-              </button>
-            ))}
+      <div id="main-content" tabIndex={-1} className="page-wrap page-enter">
+        <header className="dashboard-hero">
+          <div>
+            <p className="eyebrow mb-5"><span className="live-dot" />Your table is ready</p>
+            <h1 className="display-title">A good day for<br />a great game.</h1>
+            <p className="page-description mt-4">Hello, {account.username}. Settle into a classic, change the rules,<br className="hidden sm:block" /> or bring a friend to the other side of the board.</p>
+            <div className="mt-5 flex flex-wrap items-center gap-5"><span className="quiet-label">Three variants. Endless possibilities.</span><Link href="/watch" className="text-link">Explore live games<Icon name="arrow" size={15} /></Link></div>
           </div>
+          <div className="hero-art" aria-hidden="true"><Icon name="knight" className="hero-piece" /><span className="hero-art-caption">The next move is yours</span></div>
+        </header>
 
-          <form className="mb-6 flex flex-wrap items-end gap-3" onSubmit={(event) => {
-            event.preventDefault();
-            const minutes = Number(customMinutes);
-            const increment = Number(customIncrement);
-            const estimate = minutes * 60 + increment * 40;
-            setTc({ label: `${minutes}+${increment}`, minutes, increment,
-              tag: estimate < 180 ? 'Bullet' : estimate < 480 ? 'Blitz' : estimate <= 1500 ? 'Rapid' : 'Classical' });
-          }}>
-            <label className="text-xs text-zinc-400">Minutes
-              <input type="number" min="1" max="180" step="1" required value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} className="mt-1 block w-24 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-white" />
-            </label>
-            <label className="text-xs text-zinc-400">Increment (seconds)
-              <input type="number" min="0" max="180" step="1" required value={customIncrement} onChange={(event) => setCustomIncrement(event.target.value)} className="mt-1 block w-28 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-white" />
-            </label>
-            <button type="submit" className="rounded border border-blue-500/40 px-3 py-2 text-sm text-blue-300">Use custom time</button>
-            <p className="w-full text-xs text-zinc-400">Selected: {tc.label} · {tc.tag}</p>
-          </form>
+        <div className="dashboard-grid">
+          <div className="min-w-0 space-y-5">
+            {active.length > 0 && <section className="surface px-6 py-5" aria-label="Continue playing"><div className="section-head mb-1"><h2>Pick up where you left off</h2><span className="live-pill"><span className="live-dot" />{active.length} active</span></div>{active.map(game => <Link key={game.gameId} href={`/room/${game.gameId}`} className="room-item"><span className="icon-well"><Icon name="board" size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm">vs {game.opponent}</span><span className="mt-1 block text-xs capitalize text-zinc-500">{game.variant} · {game.minutes}+{game.increment} · {game.color}</span></span><span className="text-link">Resume<Icon name="arrow" size={14} /></span></Link>)}</section>}
+            {(listError || activeError) && <p role="alert" className="alert-box">Game lists unavailable: {activeError || listError} <button type="button" className="underline" onClick={() => { setListError(null); setActiveError(null); setListRetry(value => value + 1); }}>Retry</button></p>}
 
-          <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:gap-2">
-            <span className="col-span-3 mb-1 text-xs font-bold uppercase tracking-wider text-zinc-500 sm:mb-0 sm:mr-2">Variant</span>
-            {VARIANTS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => chooseVariant(v)}
-                aria-pressed={variant === v}
-                className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold capitalize transition-colors sm:px-4 ${
-                  variant === v ? 'bg-zinc-800 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
+            <section id="create-game" className="surface setup-card" aria-label="Create a game">
+              <fieldset disabled={busy || searching} className="min-w-0 border-0 p-0">
+                <div className="section-head"><h2><span className="section-number">01</span>Choose your game</h2><span className="quiet-label">Make it your own</span></div>
+                <div className="variant-grid" role="group" aria-label="Chess variant">{VARIANTS.map(option => <button key={option.id} type="button" aria-label={option.title} aria-pressed={variant === option.id} onClick={() => chooseVariant(option.id)} className="variant-option"><span className="variant-option-icon"><Icon name={option.icon} size={26} />{variant === option.id && <Icon name="check" size={15} />}</span><span className="variant-option-title">{option.title}</span><span className="variant-option-description">{option.description}</span></button>)}</div>
 
-          <label className="mt-5 block text-sm text-zinc-300">Computer strength
-            <select value={aiLevel} onChange={(event) => setAiLevel(event.target.value as typeof aiLevel)} className="ml-3 rounded border border-zinc-700 bg-zinc-950 px-3 py-2">
-              <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
-            </select>
-            <span className="mt-2 block text-xs text-zinc-500">Applies to all computer seats. Levels adjust search effort, not a guaranteed rating.</span>
-          </label>
-        </section>
+                <div className="setup-divider" />
+                <div className="section-head"><h2><span className="section-number">02</span>Set the pace</h2><span className="quiet-label">{tc.label} · {tc.tag}</span></div>
+                <div className="time-grid" role="group" aria-label="Time control">{TIME_CONTROLS.map(option => <button key={option.label} type="button" aria-pressed={tc.label === option.label} className="time-option" onClick={() => setTc(option)}><strong>{option.label}</strong><span>{option.tag}</span></button>)}</div>
+                <details className="custom-time"><summary>A different rhythm? Set a custom time</summary><form onSubmit={event => {
+                  event.preventDefault(); const minutes = Number(customMinutes); const increment = Number(customIncrement); const estimate = minutes * 60 + increment * 40;
+                  setTc({ label: `${minutes}+${increment}`, minutes, increment, tag: estimate < 180 ? 'Bullet' : estimate < 480 ? 'Blitz' : estimate <= 1500 ? 'Rapid' : 'Classical' });
+                }}><label className="field-label">Minutes<input className="field" type="number" min="1" max="180" step="1" required value={customMinutes} onChange={event => setCustomMinutes(event.target.value)} /></label><label className="field-label">Increment (seconds)<input className="field" type="number" min="0" max="180" step="1" required value={customIncrement} onChange={event => setCustomIncrement(event.target.value)} /></label><button type="submit" className="button-secondary">Apply time</button></form></details>
 
-        {variant !== 'bughouse' && <section className="flex flex-col items-center rounded-3xl border border-blue-500/30 bg-gradient-to-b from-blue-500/10 to-transparent p-8 shadow-xl sm:flex-row sm:justify-between">
-          <div className="mb-4 text-center sm:mb-0 sm:text-left">
-            <h2 className="text-lg font-bold text-white">Quick match</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              {searching ? 'Searching for an opponent…' : `Get paired with someone at ${tc.label} ${variant}.`}
-            </p>
-          </div>
-          {searching ? (
-            <div className="flex items-center gap-4">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-              <button
-                type="button"
-                onClick={cancelSearch}
-                disabled={canceling || startingSearch}
-                className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800"
-              >
-                {canceling ? 'Canceling…' : 'Cancel'}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={quickMatch}
-              className="rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all hover:bg-blue-500"
-            >
-              Find opponent
-            </button>
-          )}
-        </section>}
-
-        {variant === 'bughouse' && (
-          <section className="border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-            <div className="flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex-1">
-                <h2 className="text-lg font-bold text-white">Bughouse room</h2>
-                <p className="mt-1 text-sm text-zinc-500">Choose how many seats are controlled by people.</p>
-                <span className="mb-2 mt-6 block text-xs font-bold uppercase tracking-wider text-zinc-500">Human players</span>
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 2, 3, 4].map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => chooseBughouseCount(count)}
-                      className={`border px-3 py-2 text-sm font-bold ${
-                        bughouseHumans === count
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                      }`}
-                    >
-                      {count}H
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1">
-                <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Your color on Board A</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['white', 'black'] as const).map((choice) => (
-                    <button
-                      key={choice}
-                      type="button"
-                      onClick={() => chooseBughouseColor(choice)}
-                      className={`border px-4 py-2 text-sm font-bold capitalize ${
-                        color === choice
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                      }`}
-                    >
-                      {choice}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="mt-7 border-t border-zinc-800 pt-6">
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Human seats</span>
-                <span className={`text-xs font-semibold ${
-                  bughouseSeats.length === bughouseHumans ? 'text-emerald-400' : 'text-amber-400'
-                }`}>
-                  {bughouseSeats.length}/{bughouseHumans} selected
-                </span>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(['A', 'B'] as const).map((board) => (
-                  <div key={board} className="border border-zinc-800 p-3">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Board {board}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {BUGHOUSE_SEATS.filter((seat) => seat.board === board).map((seat) => {
-                        const selected = bughouseSeats.includes(seat.code);
-                        const creator = seat.code === (color === 'white' ? 'aw' : 'ab');
-                        return (
-                          <button
-                            key={seat.code}
-                            type="button"
-                            aria-pressed={selected}
-                            onClick={() => toggleBughouseSeat(seat.code)}
-                            className={`min-w-0 border px-3 py-3 text-left transition-colors ${
-                              selected
-                                ? 'border-blue-500 bg-blue-500/10 text-white'
-                                : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                            }`}
-                          >
-                            <span className="block text-sm font-bold">{seat.color}</span>
-                            <span className={`mt-1 block text-xs ${seat.team === 'Blue' ? 'text-blue-400' : 'text-rose-400'}`}>
-                              {seat.team} team{creator ? ' · You' : ''}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                <div className="setup-divider" />
+                <div className="section-head"><h2><span className="section-number">03</span>{variant === 'bughouse' ? 'Build your table' : 'Choose your company'}</h2></div>
+                {variant !== 'bughouse' ? <>
+                  <div className="segmented" role="group" aria-label="Opponent type">{([{ id: 'computer', label: 'Computer', icon: 'computer' }, { id: 'friend', label: 'A friend', icon: 'people' }, { id: 'match', label: 'Quick match', icon: 'play' }] as const).map(mode => <button type="button" key={mode.id} aria-pressed={opponent === mode.id} onClick={() => setOpponent(mode.id)} className="segment"><Icon name={mode.icon} size={15} />{mode.label}</button>)}</div>
+                  <div className="mt-5 min-h-24">
+                    {opponent === 'computer' ? <div className="grid gap-5 sm:grid-cols-2"><div><span className="field-label mb-2">Your side</span><div className="segmented" role="group" aria-label="Your color">{(['white', 'black'] as const).map(choice => <button type="button" key={choice} aria-pressed={color === choice} onClick={() => setColor(choice)} className="segment capitalize"><span className={`h-2.5 w-2.5 rounded-full border ${choice === 'white' ? 'border-zinc-200 bg-zinc-200' : 'border-zinc-500 bg-zinc-950'}`} />{choice}</button>)}</div></div><label className="field-label">Computer strength<select className="field" value={aiLevel} onChange={event => setAiLevel(event.target.value as typeof aiLevel)}><option value="easy">Easy · Find your footing</option><option value="medium">Medium · A worthy opponent</option><option value="hard">Hard · Rise to the challenge</option></select></label><p className="col-span-full text-[11px] leading-relaxed text-zinc-500">Practice at your pace. Strength changes search effort; it is not a guaranteed rating.</p></div>
+                    : opponent === 'friend' ? <div className="flex flex-wrap items-center justify-between gap-4"><p className="max-w-xs text-sm leading-relaxed text-zinc-400">A board for two. Create a room and share the invitation with your friend.</p><button type="button" aria-pressed={rated} onClick={() => setRated(!rated)} className="button-secondary"><Icon name={rated ? 'trophy' : 'people'} size={16} />{rated ? 'Rated game' : 'Casual game'}</button></div>
+                    : <div className="flex items-start gap-3"><span className="icon-well"><Icon name="play" size={18} /></span><div><h3 className="text-sm font-medium">Meet your next opponent.</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Join the queue for {tc.label} {variant === 'standard' ? 'chess' : variant}. Your game opens as soon as a player matches.</p></div></div>}
                   </div>
-                ))}
+                </> : <>
+                  <p className="mb-5 text-xs leading-relaxed text-zinc-400">Invite your team or let the engine fill in. You choose who sits where.</p>
+                  <div className="grid gap-5 sm:grid-cols-2"><div><span className="field-label mb-2">Human players</span><div className="segmented" role="group" aria-label="Human players">{[1, 2, 3, 4].map(count => <button key={count} type="button" aria-pressed={bughouseHumans === count} onClick={() => chooseBughouseCount(count)} className="segment">{count}</button>)}</div></div><div><span className="field-label mb-2">Your color on Board A</span><div className="segmented" role="group" aria-label="Your bughouse color">{(['white', 'black'] as const).map(choice => <button type="button" key={choice} aria-pressed={color === choice} onClick={() => chooseBughouseColor(choice)} className="segment capitalize">{choice}</button>)}</div></div></div>
+                  <div className="mt-5 flex justify-between text-xs"><span className="text-zinc-400">Choose the human seats</span><span className={bughouseSeats.length === bughouseHumans ? 'text-accent-300' : 'text-amber-300'}>{bughouseSeats.length}/{bughouseHumans} selected</span></div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">{(['A', 'B'] as const).map(board => <div key={board} className="surface-inset p-3"><p className="eyebrow mb-3">Board {board}</p><div className="grid grid-cols-2 gap-2">{BUGHOUSE_SEATS.filter(seat => seat.board === board).map(seat => { const selected = bughouseSeats.includes(seat.code); const creator = seat.code === (color === 'white' ? 'aw' : 'ab'); return <button key={seat.code} type="button" aria-pressed={selected} aria-label={`Board ${seat.board} ${seat.color}, ${seat.team} team${creator ? ', your seat' : ''}`} onClick={() => toggleBughouseSeat(seat.code)} className="seat-option"><span className="block text-xs font-semibold">{seat.color}{creator && <span className="ml-1 text-accent-300">· You</span>}</span><span className={`mt-1 block text-[10px] ${seat.team === 'Blue' ? 'text-sky-300' : 'text-rose-300'}`}>{seat.team} team · {selected ? 'Human' : 'Computer'}</span></button>; })}</div></div>)}</div>
+                  <div className="mt-4"><label className="field-label">Computer strength<select className="field" disabled={bughouseHumans === 4} value={aiLevel} onChange={event => setAiLevel(event.target.value as typeof aiLevel)}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label><p className="mt-2 text-[11px] text-zinc-500">{bughouseHumans === 4 ? 'A full table. Invite three friends after creating the room.' : `One level for all ${4 - bughouseHumans} computer seats. Remaining human seats join by invitation.`}</p></div>
+                </>}
+              </fieldset>
+              <div className="mt-5 border-t border-zinc-800 pt-2"><div className="setup-summary" aria-label="Game summary"><span className="capitalize">{variant === 'standard' ? 'Chess' : variant}</span><span>{tc.label} {tc.tag}</span><span>{variant === 'bughouse' ? `${bughouseHumans} human · ${4 - bughouseHumans} AI` : opponent === 'computer' ? `vs Computer · ${color}` : opponent === 'friend' ? rated ? 'Friend · Rated' : 'Friend · Casual' : 'Matchmaking'}</span></div>
+                {searching ? <div role="status" className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-xs text-accent-300"><Icon name="clock" size={17} />{startingSearch ? 'Joining the queue…' : 'Finding your opponent…'}</span><button type="button" disabled={canceling || startingSearch} onClick={cancelSearch} className="button-secondary">{canceling ? 'Canceling…' : 'Cancel search'}</button></div> : <button type="button" className="button-primary w-full" disabled={busy || (variant === 'bughouse' && bughouseSeats.length !== bughouseHumans)} onClick={() => variant === 'bughouse' ? create({ vsEngine: bughouseHumans < 4, rated: false, color, humanPlayers: bughouseHumans, humanSeats: bughouseSeats }) : opponent === 'computer' ? create({ vsEngine: true, color }) : opponent === 'friend' ? create({ vsEngine: false, rated }) : quickMatch()}>{busy ? 'Preparing your board…' : variant === 'bughouse' ? bughouseHumans === 1 ? 'Play with three computers' : 'Create your team room' : opponent === 'computer' ? 'Play the computer' : opponent === 'friend' ? 'Create an invitation' : 'Find an opponent'}{!busy && <Icon name="arrow" size={17} />}</button>}
               </div>
-              <p className="mt-3 text-xs text-zinc-500">Unselected seats are controlled by the engine.</p>
-            </div>
-            <button
-              type="button"
-              disabled={busy || bughouseSeats.length !== bughouseHumans}
-              onClick={() => create({
-                vsEngine: bughouseHumans < 4,
-                rated: false,
-                color,
-                humanPlayers: bughouseHumans,
-                humanSeats: bughouseSeats,
-              })}
-              className="mt-7 w-full bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-500 disabled:opacity-60"
-            >
-              {busy
-                ? 'Creating room...'
-                : bughouseHumans === 1
-                  ? 'Play with three bots'
-                  : bughouseHumans === 4
-                    ? 'Create four-player room'
-                    : `Create ${bughouseHumans}H + ${4 - bughouseHumans}AI room`}
-            </button>
-          </section>
-        )}
+              {createError && <p role="alert" className="alert-box mt-4">{createError}</p>}
+            </section>
 
-        {createError && (
-          <p role="alert" className="border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {createError}
-          </p>
-        )}
-
-        {variant !== 'bughouse' && <div className="grid gap-6 md:grid-cols-2">
-          {/* vs Computer */}
-          <section className="flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-            <h2 className="text-lg font-bold text-white">Play the Computer</h2>
-            <p className="mt-1 mb-5 text-sm text-zinc-500">The engine plays the other side.</p>
-            <div className="mb-5">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Play as</span>
-              <div className="flex gap-2">
-                {(['white', 'black'] as const).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className={`flex-1 rounded-xl border px-4 py-2 text-sm font-bold capitalize transition-colors ${
-                      color === c ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-zinc-800 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => create({ vsEngine: true, color })}
-              className="mt-auto rounded-xl bg-gradient-to-b from-[#5c8aab] to-[#4b7399] px-6 py-3 font-bold text-white shadow-[0_0_20px_rgba(75,115,153,0.4)] transition-all hover:from-[#6a9bc2] hover:to-[#5785b0] disabled:opacity-60"
-            >
-              {busy ? 'Creating game...' : 'Play'}
-            </button>
-          </section>
-
-          {/* vs Friend */}
-          <section className="flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-            <h2 className="text-lg font-bold text-white">{variant === 'bughouse' ? 'Create team room' : 'Play a Friend'}</h2>
-            <p className="mt-1 mb-5 text-sm text-zinc-500">
-              {variant === 'bughouse' ? 'Four seats, two boards, one shared room.' : 'Create a game and share the link.'}
-            </p>
-            <div className="mb-5">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Mode</span>
-              <button
-                type="button"
-                disabled={variant === 'bughouse'}
-                onClick={() => setRated(!rated)}
-                className={`w-full rounded-xl border px-4 py-2 text-sm font-bold transition-colors ${
-                  rated ? 'border-blue-500/40 text-blue-400' : 'border-zinc-700 text-zinc-400'
-                }`}
-              >
-                {variant === 'bughouse' ? 'Team casual' : rated ? 'Rated' : 'Casual'}
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => create({ vsEngine: false, rated: variant === 'bughouse' ? false : rated })}
-              className="mt-auto rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-100 transition-colors hover:bg-zinc-800 disabled:opacity-60"
-            >
-              {busy ? 'Creating game...' : variant === 'bughouse' ? 'Create bughouse room' : 'Create game'}
-            </button>
-          </section>
-        </div>}
-
-        {open.length > 0 && (
-          <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-            <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Open challenges</h2>
-            <div className="flex flex-col gap-2">
-              {open.map((g) => (
-                <button
-                  key={g.gameId}
-                  type="button"
-                  onClick={() => router.push(`/room/${g.gameId}`)}
-                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left transition-colors hover:border-blue-500/40"
-                >
-                  <span className="text-zinc-200">
-                    {g.creator}
-                    <span className="ml-2 text-xs capitalize text-zinc-500">
-                      {g.minutes}+{g.increment} · {g.variant} · {g.rated ? 'rated' : 'casual'}
-                      {g.variant === 'bughouse'
-                        ? ` · ${g.humansJoined ?? 0}/${g.humanTarget ?? 4} humans`
-                        : ''}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold text-blue-400">Join</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-          <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Join a room</h2>
-          <div className="flex gap-3">
-            <input
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              placeholder="room name or game link id"
-              className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
-            />
-            <button
-              type="button"
-              disabled={!room.trim()}
-              onClick={joinRoom}
-              className="rounded-xl border border-zinc-700 px-6 py-3 font-bold text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Join
-            </button>
+            <section className="surface px-6 py-5"><div className="section-head mb-3"><h2>Have an invitation?</h2><Icon name="link" size={17} className="text-zinc-500" /></div><form className="flex gap-2" onSubmit={event => { event.preventDefault(); joinRoom(); }}><input aria-label="Room ID or invitation link" className="field min-w-0 flex-1" value={room} onChange={event => { setRoom(event.target.value); setRoomError(null); }} placeholder="Paste a room link or ID" /><button className="button-secondary" type="submit" disabled={!room.trim()}>Join<Icon name="arrow" size={14} /></button></form>{roomError && <p role="alert" className="mt-3 text-xs text-rose-300">{roomError}</p>}</section>
           </div>
-          {roomError && <p role="alert" className="mt-2 text-sm text-rose-400">{roomError}</p>}
-        </section>
+
+          <aside className="dashboard-aside space-y-5 max-[800px]:space-y-0">
+            <section className="surface side-card"><div className="section-head mb-2"><h2>Beyond your board</h2><Icon name="sparkle" size={16} className="text-accent-300" /></div><p className="mb-2 text-xs leading-relaxed text-zinc-500">There&apos;s more to the game than playing.</p><FeatureLink href="/watch" icon="watch" title="The live gallery" detail="Follow every move. Pin four matches." /><FeatureLink href="/history" icon="history" title="Your game collection" detail="Replay, reflect, find the better move." /><FeatureLink href="/friends" icon="people" title="Your circle" detail="Good games start with good company." /><FeatureLink href="/leaderboard" icon="trophy" title="The club rankings" detail="Find your place. Raise your game." /></section>
+            <section className="surface side-card"><p className="eyebrow mb-3">A different kind of chess</p><h2 className="font-serif text-2xl leading-tight tracking-tight">Two boards.<br />One shared ambition.</h2><p className="mt-3 text-xs leading-relaxed text-zinc-500">In bughouse, your captures become your partner&apos;s possibilities. Bring friends, add computers, and find your rhythm as a team.</p><button type="button" className="text-link mt-4" onClick={() => { chooseVariant('bughouse'); document.getElementById('create-game')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}>Set up bughouse<Icon name="arrow" size={15} /></button></section>
+            {isGuest && <section className="side-card rounded-2xl border border-[#d7bb8c35] bg-[#d7bb8c05]"><p className="eyebrow mb-3">Make yourself at home</p><h2 className="text-sm font-medium">Your games deserve a home.</h2><p className="mt-2 text-xs leading-relaxed text-zinc-500">Keep your guest progress and build your own collection. Create an account when you&apos;re ready.</p><Link href="/upgrade" className="text-link mt-3">Create your account<Icon name="arrow" size={15} /></Link></section>}
+          </aside>
+        </div>
+
+        {open.length > 0 && <section className="surface mt-7 px-6 py-5"><div className="section-head"><h2>A seat at the table</h2><span className="live-pill"><span className="live-dot" />Open invitations</span></div><div className="grid gap-x-8 md:grid-cols-2">{open.map(game => <Link key={game.gameId} href={`/room/${game.gameId}`} className="room-item"><span className="avatar">{game.creator.slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm">{game.creator}</span><span className="mt-1 block text-[11px] capitalize text-zinc-500">{game.variant} · {game.minutes}+{game.increment} · {game.rated ? 'Rated' : 'Casual'}{game.variant === 'bughouse' ? ` · ${game.humansJoined ?? 0}/${game.humanTarget ?? 4} humans` : ''}</span></span><span className="text-link">Join<Icon name="arrow" size={14} /></span></Link>)}</div></section>}
+        <footer className="screen-footer"><span>Chessoc · A place for the game.</span><div className="flex gap-5"><Link href="/settings" className="hover:text-zinc-200">Make it yours</Link><Link href="/watch" className="hover:text-zinc-200">Watch live</Link></div></footer>
       </div>
     </main>
   );

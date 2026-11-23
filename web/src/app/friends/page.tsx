@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api, type Friend, type FriendCard } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
+import { PageHeading, JourneyNav } from '@/components/ui/PageHeading';
+import { Icon } from '@/components/ui/Icon';
 
 export default function FriendsPage() {
   const { account, token, ready, logout, handleAuthError, authError, retryAuth } = useAuth(true);
@@ -86,31 +88,31 @@ export default function FriendsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen app-background text-white">
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="mb-6 text-3xl font-black tracking-tighter">Friends</h1>
+      <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
+        <PageHeading eyebrow="YOUR CIRCLE" title="Better on the same board." description="Find your people, share a game, and make a good rivalry a regular thing." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
-        <form onSubmit={add} className="mb-2 flex gap-3">
+        <form onSubmit={add} className="surface mb-5 flex flex-wrap gap-3 p-5"><label className="field-label w-full" htmlFor="friend-username">Invite someone into your circle</label>
           <input
-            aria-label="Friend’s username"
+            id="friend-username" aria-label="Friend’s username"
             disabled={busy}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="add by username"
-            className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white placeholder-zinc-600 outline-none focus:border-blue-500"
+            className="field min-w-0 flex-1"
           />
           <button
             type="submit"
             disabled={busy || !username.trim()}
-            className="rounded-xl bg-blue-600 px-6 py-3 font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+            className="button-primary"
           >
             {busy ? 'Please wait…' : 'Send request'}
           </button>
         </form>
-        {note && <p role="status" className="mb-4 text-sm font-medium text-blue-400">{note}</p>}
+        {note && <p role="status" className="mb-4 text-sm font-medium text-accent-400">{note}</p>}
         {error && <p role="alert" className="mb-4 text-sm font-medium text-rose-400">{error} Retry the action to try again.</p>}
         {!loading && result?.error && <div role="alert" className="mb-4 text-rose-400"><p>Could not load friends and requests: {result.error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)} className="mt-2 underline">Retry friends and requests</button></div>}
         {loading && <p role="status" className="my-4 text-zinc-400">Loading friends and requests…</p>}
@@ -122,7 +124,7 @@ export default function FriendsPage() {
             <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
               {incoming.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 border-b border-zinc-800/70 px-6 py-3 last:border-0">
-                  <Link href={`/profile/${r.id}`} className="flex-1 font-medium text-zinc-100 hover:text-blue-400">
+                  <Link href={`/profile/${r.id}`} className="flex-1 font-medium text-zinc-100 hover:text-accent-400">
                     {r.username}
                   </Link>
                   <button
@@ -130,7 +132,7 @@ export default function FriendsPage() {
                     disabled={busy}
                     aria-label={`Accept request from ${r.username}`}
                     onClick={() => respond(r.id, true)}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-blue-500"
+                    className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-accent-500"
                   >
                     Accept
                   </button>
@@ -163,17 +165,16 @@ export default function FriendsPage() {
           </section>
         )}
 
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-zinc-500">Your friends</h2>
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl">
+        <div className="section-head"><h2>Your circle <span className="text-xs text-zinc-500">{friends.length}</span></h2><Link href="/?opponent=friend#create-game" className="text-link">Create a game<Icon name="arrow" size={14} /></Link></div>
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           {loading || result?.error ? null : friends.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm italic text-zinc-600">
-              No friends yet — add someone by their username.
+            <div className="empty-state"><span className="icon-well"><Icon name="people" /></span><h2>Good company changes the game.</h2><p>Add a friend by username above. Once you’re connected, create a room and share a board.</p><Link href="/?opponent=friend#create-game" className="button-secondary">Set up a game<Icon name="arrow" size={15} /></Link>
             </div>
           ) : (
             friends.map((f) => (
               <div key={f.id} className="flex items-center gap-3 border-b border-zinc-800/70 px-6 py-4 last:border-0">
                 <span className={`h-2.5 w-2.5 rounded-full ${f.online ? 'bg-green-500' : 'bg-zinc-600'}`} />
-                <Link href={`/profile/${f.id}`} className="flex-1 font-medium text-zinc-100 hover:text-blue-400">
+                <Link href={`/profile/${f.id}`} className="flex-1 font-medium text-zinc-100 hover:text-accent-400">
                   {f.username}
                 </Link>
                 <span className="text-xs uppercase tracking-wider text-zinc-500">{f.online ? 'online' : 'offline'}</span>
@@ -181,6 +182,7 @@ export default function FriendsPage() {
             ))
           )}
         </div>
+        <JourneyNav />
       </div>
     </main>
   );

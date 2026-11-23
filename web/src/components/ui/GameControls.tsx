@@ -39,22 +39,22 @@ export function GameControls({
 
   if (drawOffer === 'incoming') {
     return (
-      <div className="flex w-full flex-col rounded-2xl border border-blue-500/30 bg-zinc-900 p-4 shadow-xl">
-        <span className="mb-3 block text-center text-xs font-bold uppercase tracking-wider text-blue-400">
+      <div className="surface flex w-full flex-col p-4">
+        <span className="mb-3 block text-center text-xs font-bold uppercase tracking-wider text-accent-400">
           Opponent offers a draw
         </span>
         <div className="flex gap-3">
           <button
             type="button"
             onClick={() => onRespondDraw(true)}
-            className="flex-1 rounded-xl bg-blue-600 px-4 py-3 font-bold text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-colors hover:bg-blue-500"
+            className="button-primary flex-1"
           >
             Accept
           </button>
           <button
             type="button"
             onClick={() => onRespondDraw(false)}
-            className="flex-1 rounded-xl border border-zinc-700 px-4 py-3 font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
+            className="button-secondary flex-1"
           >
             Decline
           </button>
@@ -64,7 +64,7 @@ export function GameControls({
   }
 
   return (
-    <div className="flex w-full gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-xl">
+    <div className="surface flex w-full gap-2 p-3">
       {canAbort ? (
         <button
           type="button"
