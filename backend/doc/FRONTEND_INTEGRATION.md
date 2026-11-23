@@ -34,7 +34,9 @@ All endpoints answer CORS preflight (`OPTIONS` → 204) and send `Access-Control
 | `snapshot` / `resync_ok` | →client | `{ snapshot: GameSnapshot, capabilities: Capability[] }` |
 | `receipt` | →client | `{ intentId, serverTimestamp }` |
 | `result` | →client | `{ disposition: accepted\|rejected\|stale, intentId, reason?, snapshot?, capabilities? }` |
-| `error` | →client | `{ code, message }` |
+| `chat` | client→ | `{ text }` |
+| `chat` | →client | `{ color, text, serverTimestamp }` |
+| `error` | →client | `{ code, message, text? }` (`text` is the normalized rejected draft for a chat rate limit) |
 
 `GameSnapshot = { gameId, version, initialFen, fen, sideToMove, moves[], clockSample, result?, whitePlayerId, blackPlayerId }`.
 `Capability = { id, sessionId, gameId, gameVersion, kind, params, expiresAtEpochMs, signature }`.
@@ -61,6 +63,31 @@ render props + `sendMove`).
   `LiveTransport` reconnects with bounded backoff and resyncs on resume.
 - **Spectator** — a third joiner is seated `spectator`, receives snapshots with no capabilities; the
   board is inert and the panel reads "Spectator".
+- **Room chat** — players and spectators share public room chat. Sender color is assigned by the
+  server. Separate matches have separate subscribers; bughouse clients subscribe to both boards
+  and merge those two streams. The web client includes a keyboard-accessible emoji picker.
+
+### Chat protections
+
+`ChatPolicy` masks a finite list of common English profanity before broadcasting. Tests cover
+case, punctuation/spacing, repeated letters, common leetspeak, full-width letters, accents, and
+invisible separators, plus benign-word false-positive checks. This is a word filter, not a complete
+multilingual or contextual abuse classifier; other languages, novel evasions, and harassment can
+still require moderation.
+
+Messages are normalized to one line, stripped of unsafe control/bidi formatting, and limited to
+500 UTF-16 units without splitting Unicode grapheme clusters. Emoji joiners and non-English text
+are preserved. Empty messages are ignored. React renders received content as text, never HTML.
+
+Each board allows one chat message per player every 750 ms, independent of move intents. Reconnecting
+does not reset the player's limit within that board. Rejection sends `error` with
+`code: chat_rate_limited`, a user-facing `message`, and the prepared `text` for restoring the draft.
+The frontend handles this separately from board errors and keeps the newest 200 messages per board
+in memory. Chat history is not persisted across a full page reload.
+
+With the local Compose stack running, Node 22+ can exercise two concurrent disposable matches:
+`node backend/scripts/smoke-chat.mjs`. The script checks isolation, moderation, emoji/length limits,
+sender spoofing, malformed-message recovery, and burst throttling, then aborts its fixtures.
 
 ## Documented, no UI yet
 
@@ -72,7 +99,6 @@ Supported server-side / reachable via the integration layer but deliberately not
 - **Clock staleness** — no stale/disconnected clock indicator (§6).
 - **Captured pieces / material** — not in `GameSnapshot`; the panels render empty. Needs a server field
   (must not be recomputed client-side).
-- **Chat** — player/spectator channels are unimplemented server-side and unbuilt client-side.
 
 ## Seating & clocks (dev defaults)
 

@@ -90,6 +90,43 @@ class MatchGameTest {
     }
 
     @Test
+    void chatIsMaskedIsolatedAndRateLimitedAcrossReconnectsWithoutChangingTheBoard() {
+        java.util.concurrent.atomic.AtomicLong time = new java.util.concurrent.atomic.AtomicLong(1000);
+        MatchService service = new MatchService(foolsMateEngine(), new InMemoryMatchRepository(),
+                new ManualScheduler(), time::get);
+        MatchGame first = service.create(new GameSpec("chat-one", Variant.STANDARD, Fen.parse(INIT),
+                "pW", "pB", TimeControl.fischer(180000, 2000), false));
+        MatchGame second = service.create(new GameSpec("chat-two", Variant.STANDARD, Fen.parse(INIT),
+                "pW", "pB", TimeControl.fischer(180000, 2000), false));
+        CapturingSink otherRoom = new CapturingSink();
+        CapturingSink viewer = new CapturingSink();
+        first.subscribe(white, wSink);
+        first.subscribe(black, bSink);
+        first.subscribe(new Session("sV", "pV", "cV"), viewer);
+        second.subscribe(white, otherRoom);
+        int otherCount = otherRoom.messages.size();
+        first.chat(white, "SHIT! 😀");
+        assertThat((Messages.Chat) bSink.last().payload()).isEqualTo(new Messages.Chat("white", "****! 😀", 1000));
+        assertThat(viewer.last().payload()).isEqualTo(bSink.last().payload());
+        assertThat(otherRoom.messages).hasSize(otherCount);
+        int delivered = bSink.messages.size();
+        first.chat(white, "flood");
+        assertThat(bSink.messages).hasSize(delivered);
+        assertThat(wSink.last().payload()).isInstanceOf(Messages.ChatRejected.class);
+        first.unsubscribe(white.playerId(), wSink);
+        first.subscribe(new Session("new-session", "pW", "new-connection"), wSink);
+        first.chat(white, "still too soon");
+        assertThat(wSink.last().payload()).isInstanceOf(Messages.ChatRejected.class);
+        first.chat(black, "other player can reply");
+        assertThat(((Messages.Chat) wSink.last().payload()).color()).isEqualTo("black");
+        time.addAndGet(750);
+        first.chat(white, "ready again");
+        assertThat(((Messages.Chat) bSink.last().payload()).text()).isEqualTo("ready again");
+        assertThat(first.currentSnapshot().version()).isZero();
+        assertThat(first.currentSnapshot().moves()).isEmpty();
+    }
+
+    @Test
     void disconnectRemovesViewerButDoesNotRemoveItsReplacementConnection() {
         MatchGame game = newGame(foolsMateEngine(), new InMemoryMatchRepository(), new ManualScheduler());
         Session viewer = new Session("viewer-session", "viewer", "old-connection");

@@ -62,6 +62,9 @@ public final class Messages {
     public record Error(String code, String message) {
     }
 
+    public record ChatRejected(String code, String message, String text) {
+    }
+
     public record Pong() {
     }
 

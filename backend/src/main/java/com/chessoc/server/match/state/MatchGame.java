@@ -2,6 +2,7 @@ package com.chessoc.server.match.state;
 
 import com.chessoc.server.capability.Capability;
 import com.chessoc.server.capability.CapabilityKind;
+import com.chessoc.server.chat.ChatPolicy;
 import com.chessoc.server.domain.Fen;
 import com.chessoc.server.domain.PieceType;
 import com.chessoc.server.domain.Side;
@@ -19,6 +20,7 @@ import com.chessoc.server.protocol.GameSnapshot;
 import com.chessoc.server.protocol.MessageType;
 import com.chessoc.server.protocol.Messages;
 import com.chessoc.server.session.Session;
+import com.chessoc.server.session.RateLimiter;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -62,6 +64,7 @@ public final class MatchGame {
     private final List<Uci> moves = new ArrayList<>();
     private final EnumMap<Side, Clock> clocks = new EnumMap<>(Side.class);
     private final Map<String, Subscriber> subscribers = new LinkedHashMap<>();
+    private final RateLimiter chatLimiter = new RateLimiter(750);
     private final Map<String, Capability> currentCaps = new HashMap<>();
     private final Map<String, Messages.Result> resultByIntent = new HashMap<>();
     private final List<String> capturedByWhite = new ArrayList<>();
@@ -254,12 +257,13 @@ public final class MatchGame {
     public void chat(Session session, String text) {
         lock.lock();
         try {
-            if (text == null || text.isBlank()) {
+            if (!subscribers.containsKey(session.playerId())) return;
+            String body = ChatPolicy.prepare(text);
+            if (body.isEmpty()) return;
+            if (!chatLimiter.allow(session.playerId(), now())) {
+                sendTo(session.playerId(), MessageType.ERROR, new Messages.ChatRejected(
+                        "chat_rate_limited", "Message not sent. Please wait a moment before sending again.", body));
                 return;
-            }
-            String body = text.strip();
-            if (body.length() > 500) {
-                body = body.substring(0, 500);
             }
             Side side = playerSide(session.playerId());
             String color = side == null ? "spectator" : side.name().toLowerCase();
