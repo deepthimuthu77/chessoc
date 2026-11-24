@@ -294,33 +294,36 @@ Rules:
 - The reducer is a **pure function**; it MUST NOT call a rules engine or compute FEN.
 - Production code **MUST NOT** import `chess.js` or any rules engine (enforced in §14).
 
-### 10.1 Web layout (target)
+### 10.1 Web layout
 
 - `web/src/lib/protocol.ts` - envelope + message types, version check.
-- `web/src/lib/transport.ts`, `web/src/lib/mock-transport.ts` - live + dev transports behind one interface.
+- `web/src/lib/transport.ts` - live WebSocket transport with keepalive, bounded backoff, and ticket auth.
+- `web/src/lib/api.ts` - HTTP client for auth, lobby, matchmaking, and social actions.
 - `web/src/lib/store.ts` (reducer + state machine) - auth/connection/projection/UI.
-- `web/src/lib/view-model.ts` - FEN→pieces, capability→targets adapters.
+- `web/src/lib/view-model.ts` - FEN→pieces, capability→targets adapters, clock interpolation.
 - `web/src/hooks/use-game.ts` - wires transport ↔ store, exposes state + `sendIntent` (with local prediction).
-- `web/src/components/ui/*` - presentational components (see §15).
+- `web/src/components/ui/*` - presentational components (board, hands, clocks, chat, dialogs).
 
-### 10.2 Python layout (target)
+### 10.2 Python layout
 
-- `chessoc_gui/protocol.py` - dataclasses mirroring the envelope/messages.
-- `chessoc_gui/transport.py` (interface) + `wss_transport.py` / `tcp_transport.py` / `mock_transport.py`.
-- `chessoc_gui/state.py` - projection + reducer + connection/auth state.
-- `chessoc_gui/auth_store.py` - secure token storage abstraction.
-- Preserved presentation modules: `board_view.py`, `fen.py`, `controls.py`, `theme.py`.
+- `chessoc_gui/app.py` - main application loop and panel layout.
+- `chessoc_gui/board_view.py` - board coordinates, piece blitting, and square rendering.
+- `chessoc_gui/fen.py` - FEN string parsing into square placements.
+- `chessoc_gui/controls.py` - presentational buttons.
+- `chessoc_gui/theme.py` - visual palette and fonts.
 
-## 11. Temporary Mock API
+## 11. Testing and Engine Verification
 
-Until the real server transport exists, both clients develop and test against a standalone mock.
+Development and regression verification validate both clients against the authoritative protocol:
 
-- **Separate process** at [mock-service/](mock-service/); it is **not** part of either client's production bundle.
-- Implements the **same protocol** (§8) over HTTPS + WSS: auth handshake, snapshots, capabilities, intents, receipts, results, clock pushes, resync.
-- **Deterministic scenarios** driven by shared fixtures: accepted moves, rejections (with reasons), stale-version responses, disconnect/reconnect, promotion, and spectator (no capabilities).
-- It **MUST NOT** return generic booleans or make chess decisions on the client's behalf; it returns typed snapshots and dispositions exactly as the real server would.
-- **Dev-only activation:** the web client selects the mock transport only under an explicit env flag (e.g. `NEXT_PUBLIC_MOCK_API`); the Python client only under an explicit flag/env. The mock MUST NOT be the production default, and its modules MUST be excluded from production configuration.
-- **Shared fixtures** live under [fixtures/](fixtures/) and are consumed by the mock and by both client test suites, keeping contract behavior identical.
+- **Authoritative Backend:** Testing is executed against the live Java Game Server and engine workers
+  (bundled Vector-64 v1.1.1 or the dev Python engine).
+- **Deterministic Scenarios:** Tests exercise accepted moves, rejections (with server reasons),
+  stale-version responses, disconnect/reconnect, pawn promotion, and spectator mode (empty capabilities).
+- **Zero Client Decision-Making:** The backend returns typed snapshots and dispositions; clients never
+  make chess decisions.
+- **Contract Tests:** Frontend tests verify reducer transitions, prediction reconciliation, and socket
+  handling in `web/tests/`.
 
 ## 12. Failure and Recovery UX
 
@@ -360,48 +363,47 @@ While disconnected the board remains visible at its last confirmed state, but it
 - **Web:** unit tests for reducer/view-model, integration against the mock transport, and end-to-end coverage of move/reject/reconnect/promotion/clock-render.
 - **Python:** headless (offscreen surface) tests for reducer, transport, and FEN rendering.
 
-## 15. Migration Map From Current Code
+## 15. Completed Migration: Authority Removal
 
-### 15.1 Web - remove authority, keep presentation
+The client authority removal is fully complete across both clients:
 
-Authoritative logic to **remove** from [web/src/app/(game)/room/[id]/page.tsx](web/src/app/(game)/room/[id]/page.tsx):
+### 15.1 Web - passive presentation enforced
 
-- The `chess.js` `Chess` instance and all rule calls (`.move()`, `.moves()`, `.turn()`, `.isGameOver()`, `.isCheckmate()`, etc.).
-- The local `setInterval` clock countdown.
-- Client-side captured-piece and material computation.
-- Client-side game-over reason/winner derivation and local restart.
+Authoritative logic was completely removed from `web/src/app/(game)/room/[id]/page.tsx`:
+- `chess.js` and all local rules evaluation were removed.
+- Client-side interval countdown was replaced with server clock sampling and presentation-only display interpolation.
+- Captures and material values are delivered directly in server `GameSnapshot`.
+- Game results, draws, checkmate, and rematches are adjudicated solely by the server.
 
-Replace with: a `use-game` hook exposing the server projection, capabilities, and `sendIntent` (with local prediction per §5).
+The view layer is powered by `use-game.ts` and `store.ts`:
+- `Board.tsx` consumes a pure view-model (`fen`, server-provided `legalTargets`, `pendingMove`, interactivity).
+- Framer Motion provides smooth 160 ms piece transitions with conditional snap-back on rejection or disconnect.
+- `GameOverModal.tsx` renders server outcome details and provides one-click rematch creation.
 
-[web/src/components/ui/Board.tsx](web/src/components/ui/Board.tsx): stop taking a `Chess` object and calling `game.moves()`; take a **view-model** (`fen`→pieces, server-provided `legalTargets`, `pendingAnimation`, `interactive`). Remove the `chess.js` import.
+### 15.2 Python - passive renderer
 
-**Preserve** the reusable presentation: Framer Motion piece animation and drag in [web/src/components/ui/Piece.tsx](web/src/components/ui/Piece.tsx) (add `interactive`/`pending` and conditional snap-back), [web/src/components/ui/MoveHistory.tsx](web/src/components/ui/MoveHistory.tsx) and [web/src/components/ui/CapturedPieces.tsx](web/src/components/ui/CapturedPieces.tsx) (already pure presentational - fed by server data), and the landing/room styling. Rework [web/src/components/ui/GameOverModal.tsx](web/src/components/ui/GameOverModal.tsx) to render the server result and a rematch capability instead of a local restart.
+In `python_gui/`:
+- `app.py` renders purely from server-delivered FEN without maintaining an independent authoritative board.
+- `board_view.py` and `fen.py` serve as pure presentation transforms.
 
-### 15.2 Python - remove scripted authority, keep the renderer
+## 16. Invariants Checklist and Rollout Status
 
-Remove from [python_gui/chessoc_gui/app.py](python_gui/chessoc_gui/app.py): the authoritative fields and scripted flow (`current_fen`/`current_board` as the source of truth, hardcoded clocks, `interaction_stage`/`_expected_player_action`, and the pre-baked `sequence.py`/`models.py` move outcomes). These move to dev fixtures and are replaced by transport + reducer.
+### 16.1 Invariants checklist (strictly enforced on every client change)
 
-**Preserve:** [python_gui/chessoc_gui/board_view.py](python_gui/chessoc_gui/board_view.py) (pixel/square mapping, drawing, animation ghost), the animation interpolation currently in `app.py`, [python_gui/chessoc_gui/fen.py](python_gui/chessoc_gui/fen.py) (FEN→placement is a rendering transform), [python_gui/chessoc_gui/controls.py](python_gui/chessoc_gui/controls.py), and [python_gui/chessoc_gui/theme.py](python_gui/chessoc_gui/theme.py).
+- [x] No rules engine imported in production code (enforced by ESLint and design).
+- [x] Projection mutated only by `snapshot` / `result` / `resync_ok`.
+- [x] Legal targets sourced from capabilities, not computed.
+- [x] No local clock adjudication; clock is display-only.
+- [x] Predicted position lives only in UI state; reconciled on result.
+- [x] Capabilities are single-use and version-bound; stale ones discarded on new snapshot.
+- [x] Disconnect freezes state and disables intents; reconnect replaces projection wholesale.
 
-## 16. Invariants Checklist and Phased Rollout
+### 16.2 Rollout status
 
-### 16.1 Pre-merge checklist (every client change)
-
-- [ ] No rules engine imported in production code.
-- [ ] Projection mutated only by `snapshot` / `result` / `resync_ok`.
-- [ ] Legal targets sourced from capabilities, not computed.
-- [ ] No local clock adjudication; clock is display-only.
-- [ ] Predicted position lives only in UI state; reconciled on result.
-- [ ] Capabilities are single-use and version-bound; stale ones discarded on new snapshot.
-- [ ] Disconnect freezes state and disables intents; reconnect replaces projection wholesale.
-
-### 16.2 Phased rollout
-
-1. **Shared contract** - protocol types + fixtures.
-2. **Mock service** - deterministic scenarios over HTTPS/WSS.
-3. **Web transport + reducer** - projection/UI separation, prediction/reconciliation.
-4. **Web UI** - board/pieces/clocks/modals on the view-model; `chess.js` removed.
-5. **Python transport + reducer** - same contract, secure token store.
-6. **Python UI** - renderer wired to projection; scripted authority removed.
-7. **Auth + reconnect hardening** - tickets, resync, edge cases, accessibility, tests.
+1. **Shared contract** (Complete) - protocol types and versioned envelope framing.
+2. **Web transport & reducer** (Complete) - pure projection/UI separation, local prediction with server reconciliation.
+3. **Web UI & components** (Complete) - board, pieces, clocks, promotion picker, chat, bughouse dual-board layouts.
+4. **Python UI** (Complete) - pygame passive board renderer wired to FEN.
+5. **Auth & reconnect hardening** (Complete) - ticket issuance, resync on reconnect, offline handling, emoji chat.
+6. **Spectator & analysis** (Complete) - 4-match live pinning on `/watch` via SSE, step-through move review and engine `/analyze`.
 
