@@ -86,6 +86,10 @@ for i in {1..30}; do
 done
 
 # 6. Optional Cloudflare Tunnel
+if ! grep -q "caddy" /etc/hosts 2>/dev/null; then
+    echo "127.0.0.1 caddy" >> /etc/hosts 2>/dev/null || true
+fi
+
 if [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
     echo "Starting Cloudflare Tunnel..."
     cloudflared tunnel --protocol http2 --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
@@ -93,7 +97,7 @@ if [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
 fi
 
 # 7. Configure and start Caddy
-if [ -n "${DOMAIN:-}" ] && [ "${DOMAIN:-}" != "localhost" ]; then
+if [ -n "${DOMAIN:-}" ] && [ "${DOMAIN:-}" != "localhost" ] && [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
     export CADDY_SERVER_NAME="$DOMAIN"
     echo "Configuring Caddy with public domain: $DOMAIN (Auto-TLS on port 80/443)"
 else

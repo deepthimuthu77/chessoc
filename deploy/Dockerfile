@@ -55,6 +55,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CHESSOC_DB_URL=jdbc:postgresql://127.0.0.1:5432/chessoc \
     CHESSOC_DB_USER=chessoc \
     CHESSOC_DB_PASSWORD=chessoc \
+    CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiMmQzYTgwYzc2ZGYyOWQ4OGYzNmNlZDVkZjk5ZmRkNDgiLCJ0IjoiMTk4Nzc4NmQtZjYzZi00MGYxLThjM2EtMjJmODQ2NzE2NmFmIiwicyI6Ik9EUm1ZVEJpTWpJdE1HSXdOeTAwTXpneExUbGlaREV0TURsaE5EZGxOR1V4TldGaiJ9 \
     PATH="/opt/vector64:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
