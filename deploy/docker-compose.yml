@@ -1,0 +1,31 @@
+name: chessoc-vps
+
+services:
+  chessoc:
+    build:
+      context: ..
+      dockerfile: Dockerfile.vps
+    image: chessoc:latest
+    container_name: chessoc
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Optional: Set your domain name for automatic Let's Encrypt HTTPS certificates
+      DOMAIN: "${DOMAIN:-}"
+      # Optional: Cloudflare Named Tunnel token (if routing through Cloudflare Zero Trust)
+      CLOUDFLARE_TUNNEL_TOKEN: "${CLOUDFLARE_TUNNEL_TOKEN:-}"
+      # Optional: Pre-set token secret (auto-generated if empty)
+      CHESSOC_TOKEN_SECRET: "${CHESSOC_TOKEN_SECRET:-}"
+      # Optional: External PostgreSQL URL (if not using the internal PostgreSQL)
+      CHESSOC_DB_URL: "${CHESSOC_DB_URL:-}"
+    volumes:
+      - chessoc_pgdata:/var/lib/postgresql/data
+      - chessoc_config:/var/lib/chessoc
+      - chessoc_caddy:/data
+
+volumes:
+  chessoc_pgdata:
+  chessoc_config:
+  chessoc_caddy:

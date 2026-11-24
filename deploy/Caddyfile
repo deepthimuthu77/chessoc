@@ -1,0 +1,19 @@
+{
+    admin off
+}
+
+{$CADDY_SERVER_NAME::80} {
+    encode zstd gzip
+
+    handle_path /api/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    handle /game* {
+        reverse_proxy 127.0.0.1:8081
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+}

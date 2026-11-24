@@ -1,0 +1,71 @@
+# Symlink / mirror of root Dockerfile.vps for deploy directory builds
+FROM debian:bookworm-slim AS engine
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /engine
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) platform=linux-x86-64-v2; all_hash=fa7f3188697ed2733fded4ad788f90976452b8c90540bd79122c0f5052e1b99d; validator_hash=be8f7b6523558f2b7190da0b025b47af18ec2943f1561e0ed4ce8e4bf9163ed6 ;; \
+      arm64) platform=linux-arm64; all_hash=350efd423e61f5cf1dbdf3419981a2f1d000232002a7739ffa89a424ae56d95c; validator_hash=5b0c9a0bc0e0c9099199fd44760f24abce7e69661b2e5843bd6bc9154d8fc4a7 ;; \
+      *) echo "Unsupported engine architecture: ${TARGETARCH}"; exit 1 ;; \
+    esac \
+    && curl -fL --retry 3 "https://github.com/fcmv/Vector-64/releases/download/v1.1.1/STK-Vector-64-$platform-all" -o vector64-all \
+    && curl -fL --retry 3 "https://github.com/fcmv/Vector-64/releases/download/v1.1.1/STK-Vector-64-$platform-validator" -o vector64-validator \
+    && printf '%s  vector64-all\n%s  vector64-validator\n' "$all_hash" "$validator_hash" | sha256sum -c - \
+    && chmod 755 vector64-all vector64-validator
+
+FROM gradle:8.10.2-jdk17 AS backend-build
+WORKDIR /home/gradle/src
+COPY backend/ .
+RUN gradle --no-daemon clean installDist
+
+FROM node:22-alpine AS web-deps
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm install --no-audit --no-fund
+
+FROM node:22-alpine AS web-build
+WORKDIR /app
+COPY --from=web-deps /app/node_modules ./node_modules
+COPY web/ .
+ENV NEXT_PUBLIC_API_BASE=/api \
+    NEXT_PUBLIC_WS_BASE= \
+    NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PGDATA=/var/lib/postgresql/data
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
+    postgresql \
+    postgresql-contrib \
+    ca-certificates \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=caddy:2.10 /usr/bin/caddy /usr/bin/caddy
+COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
+
+COPY --from=engine /engine /opt/vector64
+COPY --from=backend-build /home/gradle/src/build/install/chessoc-server /opt/chessoc-server
+
+WORKDIR /opt/chessoc-web
+COPY --from=web-build /app/public ./public
+COPY --from=web-build /app/.next/standalone ./
+COPY --from=web-build /app/.next/static ./.next/static
+
+COPY backend/db/schema.sql /opt/chessoc/schema.sql
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY deploy/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 80 443 8080 8081 5432
+VOLUME ["/var/lib/postgresql/data", "/var/lib/chessoc"]
+ENTRYPOINT ["/entrypoint.sh"]
