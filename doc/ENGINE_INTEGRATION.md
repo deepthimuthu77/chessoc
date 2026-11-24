@@ -82,8 +82,8 @@ valid for crazyhouse/bughouse flag adjudication as well.
 **Bughouse draw rules — DECIDED: real bughouse.** The server sends `setoption name DrawRules value
 variant` for bughouse boards, so `terminal` never reports `draw_threefold` or `draw_fifty_move`
 (the partner board keeps state moving; real bughouse has no such draws). **Stalemate and insufficient
-material are still detected.** *(Status: standard works today; crazyhouse/bughouse drops implemented
-on branch `STK/four-player-game-support-112931`.)*
+material are still detected.** *(Status: fully merged and active in main; standard, crazyhouse, and
+bughouse drops verified in production.)*
 
 ---
 
@@ -152,7 +152,7 @@ evict and respawn the worker.
   worker and evict it.
 - **Timeouts:** every call is time-boundable by the Adapter; a worker exceeding budget is killed and
   the request retried elsewhere.
-- **Protocol — CONFIRMED (line-based stdin/stdout; Adapter owns gRPC):** setup commands are
+- **Protocol — CONFIRMED (line-based TCP / process pipes; Adapter owns worker pool):** setup commands are
   UCI-shaped text (`setoption`, `position`, `isready`); **validator queries return JSON** (`apply`,
   `legalmoves`, `status`, `canmate`, `getfen`); search returns UCI `info`/`bestmove` text (JSON search
   reply requested, §6). **Requested:** a combined **single-line validator request** form so each call
@@ -173,7 +173,7 @@ answers. All multiplayer concerns stay in the Java server.
 
 ---
 
-## 9. Summary checklist (engine reports 12/12 implemented on branch `STK/four-player-game-support-112931`)
+## 9. Summary checklist (12/12 implemented and active in main)
 
 - [x] Lean **validator mode** (`ChessEngine-validator`, refuses `go`/`bench`).
 - [x] `apply` → legal + resulting position + terminal + `capturedDropType` (promotion-reverted).
@@ -197,6 +197,7 @@ answers. All multiplayer concerns stay in the Java server.
    persist the resulting per-ply FEN (reserve included) so bughouse state is reconstructable.
 4. **Search determinism not required** — AI runs full-strength multithread; the chosen move is
    recorded and replayed through the deterministic validator.
-5. **Crazyhouse-vs-AI ships in v1 legal-but-weak**; bughouse is HvH-only; NNUE off for variants.
+5. **Crazyhouse-vs-AI ships in v1 legal-but-weak**; bughouse supports mixed human and AI seating with
+   per-board computer movers; NNUE off for variants.
 6. **Protocol split accepted** — requested additions: JSON search reply, and a single-line validator
-   request form. Adapter owns the gRPC boundary and hard-fault detection.
+   request form. Adapter owns the process/TCP worker boundary and hard-fault detection.

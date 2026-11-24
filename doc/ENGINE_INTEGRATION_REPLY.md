@@ -34,11 +34,12 @@ updated to match. Engine requirements: [ENGINE_INTEGRATION.md](ENGINE_INTEGRATIO
 5. **Drop-variant strength — crazyhouse-vs-AI ships in v1, legal-but-weak is accepted.** We are
    offering a crazyhouse AI opponent now and accept that it hangs forced mates / has drop-unaware SEE /
    runs classical eval. So: **not blocking v1**, but the strength work (quiescence drops, drop-aware
-   SEE) is wanted on the roadmap when you can get to it. Bughouse is HvH-only; no AI there.
+   SEE) is wanted on the roadmap when you can get to it. (Note: Bughouse now supports mixed human and
+   AI seating, with computer seats driven by per-board bot movers.)
 
 6. **Protocol split — acceptable.** The Adapter parses JSON for the validator tier and UCI text for
-   search, owns the gRPC boundary, and treats timeout / non-zero exit as your `internal_error`
-   (evict + respawn), since a hard fault can't self-report. Two additions requested — see below.
+   search, owns the TCP line-protocol / process worker boundary, and treats timeout / non-zero exit as
+   your `internal_error` (evict + respawn), since a hard fault can't self-report. Two additions requested — see below.
 
 ## Requests back to you (both you offered as small)
 

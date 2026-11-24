@@ -57,27 +57,28 @@ Web + Python clients
 │       └─ Match aggregate = 1..N boards + hands + coupled clocks/win  (bughouse fits here)        │
 │  Engine Adapter     owns engine process lifecycle · translates to/from engine protocol          │
 └─────────────────────────────────────────┬───────────────────────────────────────────────────────┘
-                                           │  gRPC   ← the single real network boundary
+                                           │  Line Protocol (TCP / Stdin-Stdout) ← engine boundary
                                            ▼
 ┌──────────────────── vector64 Engine Pool ────────────────────┐
 │  Validator tier   legality / move-gen / move application      │   cheap · always-on · many workers
-│  Search tier      NNUE search · eval · analysis (HvAI only)   │   heavy · queued · autoscaled
+│  Search tier      NNUE search · eval · analysis (HvAI / bots) │   heavy · queued · autoscaled
 └───────────────────────────────────────────────────────────────┘
 
 Redis     → presence · live-session cache · reconnection state        (never authoritative)
 Postgres  → owned solely by Match State                               (single source of persistence)
 ```
 
-**Why in-process modules, not gRPC between every layer:** the four layers are always called in
+**Why in-process modules, not RPC between every layer:** the four layers are always called in
 sequence and tightly coupled; splitting them into separate processes would be a *distributed
 monolith* — paying serialization + distributed-failure + tracing cost for zero independence
-benefit. The layer boundaries are enforced as **interfaces** (contract-first, e.g. proto-shaped
-service definitions used in-process), so any module can be promoted to its own service later if a
-profiler demands it, without rewriting callers.
+benefit. The layer boundaries are enforced as **interfaces** (contract-first service definitions
+used in-process), so any module can be promoted to its own service later if a profiler demands it,
+without rewriting callers.
 
 **Why the engine is the one carved-out service:** it is CPU-heavy, crash-prone, needs an
-independent scaling axis, and benefits from process isolation. It is the only component that earns
-a network boundary in v1.
+independent scaling axis, and benefits from process isolation. It communicates over a lean
+line-based protocol (TCP socket via `TcpEngineWorker` or spawned process stdin/stdout via
+`ProcessEngineWorker`), keeping the server free of heavy C++ dependencies.
 
 ---
 
@@ -122,7 +123,7 @@ a network boundary in v1.
   surface is line-based JSON; search is UCI text (JSON reply requested).
 - **Hard-fault handling:** the engine cannot self-report a crash/hang, so the Adapter treats
   **timeout or non-zero exit as `internal_error`** → evict and respawn the worker.
-- Is the only module that talks to the engine, over gRPC.
+- Is the only module that talks to the engine, using line-protocol JSON over TCP sockets or spawned process pipes.
 
 ---
 
@@ -165,7 +166,8 @@ Engine requirements to support this are specified in [ENGINE_INTEGRATION.md](ENG
 
 **Variant AI scope:** standard-chess AI uses NNUE at full strength. **Crazyhouse-vs-AI ships in v1 as
 legal-but-weak** (NNUE is off for variants — classical eval only; the AI may hang forced mates);
-strength work is post-v1. **Bughouse is HvH-only** (no AI).
+strength work is on the roadmap. **Bughouse supports mixed human and AI seating**, with computer
+seats operated by server bot movers (`AiMover`) querying the engine search tier per board.
 
 ---
 

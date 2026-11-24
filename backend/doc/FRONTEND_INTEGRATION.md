@@ -1,107 +1,116 @@
 # Frontend Integration
 
-How the web client connects to the Java Game Server, and which parts of the API surface are wired to
-UI versus documented-only (no UI yet). The client stays a passive projection of server state; the
-server is the sole authority.
+How client interfaces connect to the Java Game Server. The client remains a passive presentation layer;
+the server is the sole authority for game state, rules, clocks, and capabilities.
 
 ## Transport split
 
-- **HTTPS** (`http://<host>:8080`, CORS-open) — auth, lobby/seating, ticket issuance.
-- **WSS** (`ws://<host>:8081/game?ticket=&gameId=`) — the live envelope protocol.
+- **HTTPS** (`http://<host>:8080/api` or `/api` via Caddy reverse proxy) — auth, account management,
+  lobby/seating, seek coordination, spectator feeds, and ticket issuance.
+- **WSS** (`ws://<host>:8081/game?ticket=&gameId=` or `/game?ticket=&gameId=` via Caddy) — persistent,
+  authenticated live envelope protocol.
 
-TLS terminates at the edge in dev (plain `http`/`ws`).
+TLS is terminated at the edge by Caddy (using on-demand local LAN certificates or public Cloudflare Quick Tunnels).
 
-## HTTP endpoints
+## HTTP API endpoints
 
-| Method + path | Body | Response | Notes |
+All endpoints accept and answer standard CORS preflight requests (`OPTIONS` → 204) with `Access-Control-Allow-Origin: *`.
+Authenticated requests provide an HTTP Bearer header: `Authorization: Bearer <session-token>`.
+
+### Authentication & accounts
+| Method + path | Request payload / query | Auth | Response | Purpose |
+|---|---|---|---|---|
+| `POST /login` | `{ playerId }` | None | `{ token, sessionId, playerId }` | Quick guest session start. |
+| `POST /auth/register` | `{ username, email, password }` | None | `{ token, sessionId, playerId, username, email }` | Create registered account. |
+| `POST /auth/login` | `{ username, password }` | None | `{ token, sessionId, playerId, username, email }` | Sign in to registered account. |
+| `POST /auth/upgrade` | `{ username, email, password }` | Bearer | `{ token, sessionId, playerId, username, email }` | Convert current guest into registered user. |
+| `GET /me` | None | Bearer | `{ id, username, email, isGuest }` | Current session user details. |
+| `POST /heartbeat` | None | Bearer | `{ ok: true, activeGames: [...] }` | Keepalive and online presence refresh. |
+| `POST /account/password` | `{ currentPassword, newPassword }` | Bearer | `{ ok: true }` | Change account password. |
+| `POST /account/delete` | `{ password }` | Bearer | `{ ok: true }` | Delete account (blocked if games active). |
+
+### Game creation & matchmaking
+| Method + path | Request payload / query | Auth | Response | Purpose |
+|---|---|---|---|---|
+| `POST /ticket` | `{}` | Bearer | `{ ticket }` | Mint single-use, short-lived WSS ticket. |
+| `POST /join` | `{ room, seat? }` | Bearer | `{ gameId, color, room, seat, ... }` | Join room or specific bughouse seat. |
+| `POST /play/create` | `{ variant, speed, rated, humanSeats?, timeControl? }` | Bearer | `{ roomId, gameId, ... }` | Create standard, crazyhouse, or bughouse game. |
+| `POST /play/rematch` | `{ gameId }` | Bearer | `{ gameId, color }` | Request/accept rematch with swapped colors. |
+| `POST /seek` | `{ variant, speed, timeControl }` | Bearer | `{ seekId }` | Queue in matchmaking pool. |
+| `GET /seek/status` | None | Bearer | `{ status: "waiting"\|"matched", gameId? }` | Poll matchmaking status. |
+| `POST /seek/cancel` | None | Bearer | `{ ok: true }` | Cancel active matchmaking seek. |
+
+### Social, discovery & review
+| Method + path | Request payload / query | Auth | Response | Purpose |
+|---|---|---|---|---|
+| `GET /friends` | None | Bearer | `{ friends: [{ id, username, online, inGame }] }` | List friends and presence. |
+| `POST /friends/add` | `{ friendId }` | Bearer | `{ ok: true }` | Send friend request. |
+| `GET /friends/requests`| None | Bearer | `{ incoming: [...] }` | Incoming friend requests. |
+| `POST /friends/accept` | `{ friendId }` | Bearer | `{ ok: true }` | Accept friend request. |
+| `POST /friends/decline`| `{ friendId }` | Bearer | `{ ok: true }` | Decline friend request. |
+| `GET /leaderboard` | `?variant=&speed=` | Optional | `{ entries: [{ rank, username, rating, ... }] }` | Pool leaderboard. |
+| `GET /leaderboard/friends`| `?variant=&speed=` | Bearer | `{ entries: [...] }` | Friends pool leaderboard. |
+| `GET /profile` | `?id=<playerId>` | Optional | `{ user, stats, ratings }` | Profile stats and ratings per pool. |
+| `GET /ratings/history` | `?id=&variant=&speed=` | Optional | `{ points: [{ at, rating }] }` | Historical rating progression. |
+| `GET /games/mine` | None | Bearer | `{ games: [...] }` | Caller's completed game history. |
+| `GET /games/active` | None | Bearer | `{ games: [...] }` | Ongoing games caller is seated in. |
+| `GET /games/open` | None | Optional | `{ games: [...] }` | Open challenges awaiting an opponent. |
+| `GET /games/live` | None | Optional | `{ games: [...] }` | Live matches with spectator count. |
+| `GET /games/live/events`| None | Optional | SSE text/event-stream | Real-time live feed for Watch page. |
+| `GET /game/moves` | `?id=<gameId>` | Optional | `{ moves: ["e2e4", ...], ... }` | Replay moves for review page. |
+| `GET /analyze` | `?variant=&fen=` | Optional | `{ bestMove, score, pv, depth }` | On-demand engine position evaluation. |
+
+## WSS Live Protocol
+
+Connect to `ws://<host>:8081/game?ticket=<ticket>&gameId=<gameId>`.
+All messages are wrapped in versioned envelopes:
+`{ "v": [1,0], "type": "<type>", "payload": { ... } }`.
+Frames with incompatible major versions are refused.
+
+| Type | Dir | Payload shape | Purpose |
 |---|---|---|---|
-| `POST /login` | `{ playerId }` | `{ token, sessionId, playerId }` | Dev stand-in for OAuth / email+password. |
-| `POST /join` | `{ room }` + `Bearer token` | `{ gameId, color }` | Seats the caller: first joiner `white`, next distinct `black`, then `spectator`. Creates the game on first join. |
-| `POST /ticket` | `{}` + `Bearer token` | `{ ticket }` | Single-use, short-lived; consumed on WSS connect. |
-| `POST /game` | `{ whiteId, blackId, variant? }` | `{ gameId }` | Dev direct create with both seats named. |
+| `intent` | client→ | `{ intentId, capabilityId, params?, clientTimestamp }` | Execute authorized action. |
+| `resync` | client→ | `{ gameId, lastKnownVersion }` | Request full state catch-up. |
+| `ping` / `pong` | both | `{}` | Heartbeat keepalive. |
+| `snapshot` | →client | `{ snapshot: GameSnapshot, capabilities: Capability[] }` | Authoritative game state update. |
+| `resync_ok` | →client | `{ snapshot: GameSnapshot, capabilities: Capability[] }` | Reconnected recovery snapshot. |
+| `receipt` | →client | `{ intentId, serverTimestamp }` | Acknowledge intent arrival. |
+| `result` | →client | `{ disposition: accepted\|rejected\|stale, intentId, reason?, snapshot?, capabilities? }` | Action outcome. |
+| `chat` | client→ | `{ text }` | Submit room message. |
+| `chat` | →client | `{ color, text, serverTimestamp }` | Broadcast sanitized message. |
+| `error` | →client | `{ code, message, text? }` | Error notice (`text` holds draft on rate limit). |
 
-All endpoints answer CORS preflight (`OPTIONS` → 204) and send `Access-Control-Allow-Origin: *`.
+### Core payload definitions
+- `GameSnapshot`:
+  `{ gameId, version, initialFen, fen, sideToMove, moves[], clockSample, result?, whitePlayerId, blackPlayerId, capturedByWhite[], capturedByBlack[], inCheck, pendingDrawOfferBy? }`
+- `Capability`:
+  `{ id, sessionId, gameId, gameVersion, kind, params, expiresAtEpochMs, signature }`
+- `ClockSample`:
+  `{ whiteRemainingMs, blackRemainingMs, activeSide, sampledAtEpochMs }`
 
-## WSS envelope
+## Wired UI Features
 
-`{ "v": [1,0], "type": "...", "payload": { ... } }`. Incompatible major → the frame is refused.
-
-| type | dir | payload |
-|---|---|---|
-| `intent` | client→ | `{ intentId, capabilityId, params, clientTimestamp }` |
-| `resync` | client→ | `{ gameId, lastKnownVersion }` |
-| `ping` / `pong` | both | `{}` |
-| `snapshot` / `resync_ok` | →client | `{ snapshot: GameSnapshot, capabilities: Capability[] }` |
-| `receipt` | →client | `{ intentId, serverTimestamp }` |
-| `result` | →client | `{ disposition: accepted\|rejected\|stale, intentId, reason?, snapshot?, capabilities? }` |
-| `chat` | client→ | `{ text }` |
-| `chat` | →client | `{ color, text, serverTimestamp }` |
-| `error` | →client | `{ code, message, text? }` (`text` is the normalized rejected draft for a chat rate limit) |
-
-`GameSnapshot = { gameId, version, initialFen, fen, sideToMove, moves[], clockSample, result?, whitePlayerId, blackPlayerId }`.
-`Capability = { id, sessionId, gameId, gameVersion, kind, params, expiresAtEpochMs, signature }`.
-
-## Client integration layer (`web/src/lib`, `web/src/hooks`)
-
-`protocol.ts` (types + envelope framing) · `api.ts` (HTTP client) · `transport.ts` (`LiveTransport`:
-keepalive ping, bounded-backoff reconnect, resync on resume) · `store.ts` (pure reducer; projection
-replaced wholesale, monotonic version, one pending action) · `view-model.ts` (FEN→pieces,
-capabilities→targets, clock interpolation, result mapping) · `use-game.ts` (wires them; exposes
-render props + `sendMove`).
-
-## Wired to UI
-
-- Board render from `fen`; legal targets and interactivity from move capabilities.
-- Click/drag move → `intent`; reconciliation on `result`/`snapshot`.
-- Move history (UCI), server clocks with display interpolation, game-over modal from `result`.
-- **Resign** — `GameControls`, two-step confirm.
-- **Draw offer / response** — `GameControls`: offer shows "Draw offered"; the opponent gets
-  Accept/Decline (`respond_draw {accept}`).
-- **Promotion picker** — `PromotionPicker` modal when a from→to has multiple promotion capabilities
-  (`promotionChoices`); a single option auto-commits.
-- **Connection status** — `ConnectionOverlay` freezes the board on `reconnecting` / `closed`;
-  `LiveTransport` reconnects with bounded backoff and resyncs on resume.
-- **Spectator** — a third joiner is seated `spectator`, receives snapshots with no capabilities; the
-  board is inert and the panel reads "Spectator".
-- **Room chat** — players and spectators share public room chat. Sender color is assigned by the
-  server. Separate matches have separate subscribers; bughouse clients subscribe to both boards
-  and merge those two streams. The web client includes a keyboard-accessible emoji picker.
-
-### Chat protections
-
-`ChatPolicy` masks a finite list of common English profanity before broadcasting. Tests cover
-case, punctuation/spacing, repeated letters, common leetspeak, full-width letters, accents, and
-invisible separators, plus benign-word false-positive checks. This is a word filter, not a complete
-multilingual or contextual abuse classifier; other languages, novel evasions, and harassment can
-still require moderation.
-
-Messages are normalized to one line, stripped of unsafe control/bidi formatting, and limited to
-500 UTF-16 units without splitting Unicode grapheme clusters. Emoji joiners and non-English text
-are preserved. Empty messages are ignored. React renders received content as text, never HTML.
-
-Each board allows one chat message per player every 750 ms, independent of move intents. Reconnecting
-does not reset the player's limit within that board. Rejection sends `error` with
-`code: chat_rate_limited`, a user-facing `message`, and the prepared `text` for restoring the draft.
-The frontend handles this separately from board errors and keeps the newest 200 messages per board
-in memory. Chat history is not persisted across a full page reload.
-
-With the local Compose stack running, Node 22+ can exercise two concurrent disposable matches:
-`node backend/scripts/smoke-chat.mjs`. The script checks isolation, moderation, emoji/length limits,
-sender spoofing, malformed-message recovery, and burst throttling, then aborts its fixtures.
-
-## Documented, no UI yet
-
-Supported server-side / reachable via the integration layer but deliberately not surfaced:
-
-- **Rematch** — `rematch {opponentId}` is issued at game end, but the server currently rejects it
-  (`rematch_not_supported_v1`); it needs a server flow (new game, swapped colours, client redirect)
-  before a button is worth wiring. `view-model.ts` exposes `findRematch` for when it lands.
-- **Clock staleness** — no stale/disconnected clock indicator (§6).
-- **Captured pieces / material** — not in `GameSnapshot`; the panels render empty. Needs a server field
-  (must not be recomputed client-side).
-
-## Seating & clocks (dev defaults)
-
-Room name maps to one game; lobby games are unrated, standard, `3+2` (`fischer(180000, 2000)`). Two
-browser tabs on the same room become White and Black. A player identity is a per-tab
-`sessionStorage` id, so two tabs are two players.
+- **Board Rendering & Legal Moves:** Rendered from server `fen`. Square dots, capture rings, and drag
+  destinations are derived entirely from server-supplied `move` capabilities.
+- **Local Prediction & Reconciliation:** Committing a move shows an optimistic preview at the target square.
+  An `accepted` snapshot confirms it smoothly without jumps; a `rejected` disposition snaps the piece back.
+- **Dual Boards & Bughouse Hands:** Bughouse rooms mount two synchronized boards (Board A and Board B)
+  sharing clocks and seating. Drops are executed by selecting a reserve piece from `Hand` and dropping
+  on a capability-authorized square (`P@e4`). Captured pieces transfer automatically between partner hands.
+- **Scoresheet & Clocks:** Tabular monospace clock display interpolates remaining time between server clock
+  samples. Flags and timeouts are adjudicated solely by the server.
+- **Game Controls:** Abort (available before move 2), Resign (with confirmation), and Draw offers/responses
+  (`offer_draw`, `respond_draw`).
+- **Pawn Promotion:** `PromotionPicker` appears when a move matches multiple promotion capabilities
+  (`e7e8q`, `e7e8r`, etc.); commits the chosen capability.
+- **Rematch:** When a game ends, clicking Rematch sends `POST /play/rematch`, redirects both players
+  to the new game room, and swaps white/black colors.
+- **Captured Pieces & Material Count:** Sourced directly from `capturedByWhite` / `capturedByBlack` in
+  the snapshot; material advantage displayed in real time.
+- **Watch & Pinned Spectator Mode:** `/watch` streams active matches via SSE with polling fallback.
+  Users can pin up to 4 games to follow simultaneously.
+- **In-Game Chat & Moderation:**
+  - Masking for common English profanity (including leetspeak, spacing, and invisible separators).
+  - Unsafe direction/control characters stripped; bounded to 500 UTF-16 units without breaking graphemes.
+  - Burst throttle: 1 message per player per board every 750 ms. Rejections return the draft to the input.
+  - Accessible emoji picker with keyboard escape and focus restoration.
