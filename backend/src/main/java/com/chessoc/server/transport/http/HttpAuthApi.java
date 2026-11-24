@@ -66,6 +66,8 @@ public final class HttpAuthApi {
     private final Map<String, MatchGame> observedGames = new ConcurrentHashMap<>();
     private final Map<String, Long> endedGames = new ConcurrentHashMap<>();
     private volatile boolean running = true;
+    public record DirectMessage(String id, String fromId, String fromUsername, String toId, String text, long timestamp) {}
+    private final List<DirectMessage> directMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public HttpAuthApi(int port, ApiServices services) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -89,7 +91,10 @@ public final class HttpAuthApi {
         route("/friends/requests", this::friendRequests);
         route("/friends/accept", this::friendAccept);
         route("/friends/decline", this::friendDecline);
+        route("/friends/status", this::friendStatus);
         route("/friends", this::friendsList);
+        route("/chat/send", this::chatSend);
+        route("/chat/messages", this::chatMessages);
         route("/leaderboard/friends", this::leaderboardFriends);
         route("/leaderboard", this::leaderboard);
         route("/profile", this::profile);
@@ -485,6 +490,96 @@ public final class HttpAuthApi {
             out.add(f);
         }
         send(x, 200, Map.of("friends", out));
+    }
+
+    private void friendStatus(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String otherId = query(x).getOrDefault("id", "").trim();
+        if (otherId.isEmpty()) {
+            send(x, 400, Map.of("error", "id required"));
+            return;
+        }
+        String myId = token.playerId();
+        String status = "none";
+        if (s.friends().areFriends(myId, otherId)) {
+            status = "friends";
+        } else if (s.friends().hasRequest(myId, otherId)) {
+            status = "requested";
+        } else if (s.friends().hasRequest(otherId, myId)) {
+            status = "incoming";
+        }
+        send(x, 200, Map.of("status", status));
+    }
+
+    private void chatSend(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        JsonNode body = read(x);
+        String toId = body.path("to").asText("").trim();
+        String rawText = body.path("text").asText("").trim();
+        if (toId.isEmpty() || rawText.isEmpty()) {
+            send(x, 400, Map.of("error", "to and text required"));
+            return;
+        }
+        String cleanText = com.chessoc.server.chat.ChatPolicy.prepare(rawText);
+        if (cleanText.isEmpty()) {
+            send(x, 400, Map.of("error", "invalid text"));
+            return;
+        }
+        String fromUsername = displayName(token.playerId());
+        DirectMessage dm = new DirectMessage(
+                UUID.randomUUID().toString(),
+                token.playerId(),
+                fromUsername,
+                toId,
+                cleanText,
+                s.clock().getAsLong()
+        );
+        directMessages.add(dm);
+        if (directMessages.size() > 5000) {
+            directMessages.remove(0);
+        }
+        send(x, 200, Map.of("ok", true, "message", Map.of(
+                "id", dm.id(),
+                "fromId", dm.fromId(),
+                "fromUsername", dm.fromUsername(),
+                "toId", dm.toId(),
+                "text", dm.text(),
+                "timestamp", dm.timestamp()
+        )));
+    }
+
+    private void chatMessages(HttpExchange x) throws IOException {
+        SessionToken token = bearer(x);
+        if (token == null) {
+            return;
+        }
+        String withId = query(x).getOrDefault("with", "").trim();
+        if (withId.isEmpty()) {
+            send(x, 400, Map.of("error", "with parameter required"));
+            return;
+        }
+        String myId = token.playerId();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (DirectMessage dm : directMessages) {
+            if ((dm.fromId().equals(myId) && dm.toId().equals(withId))
+                    || (dm.fromId().equals(withId) && dm.toId().equals(myId))) {
+                out.add(Map.of(
+                        "id", dm.id(),
+                        "fromId", dm.fromId(),
+                        "fromUsername", dm.fromUsername(),
+                        "toId", dm.toId(),
+                        "text", dm.text(),
+                        "timestamp", dm.timestamp()
+                ));
+            }
+        }
+        send(x, 200, Map.of("messages", out));
     }
 
     private void leaderboard(HttpExchange x) throws IOException {
@@ -948,7 +1043,7 @@ public final class HttpAuthApi {
             boolean mutation = Set.of("/login", "/auth/register", "/auth/login", "/auth/upgrade",
                     "/heartbeat", "/ticket", "/join", "/play/create", "/play/rematch", "/seek",
                     "/seek/cancel", "/friends/add", "/friends/accept", "/friends/decline",
-                    "/account/password", "/account/delete").contains(path);
+                    "/account/password", "/account/delete", "/chat/send").contains(path);
             if (!(mutation ? "POST" : "GET").equals(method)) {
                 exchange.getResponseHeaders().set("Allow", mutation ? "POST" : "GET");
                 send(exchange, 405, Map.of("error", "method not allowed"));
