@@ -21,6 +21,8 @@ const paths = {
   check: <path d="m5 12 4 4L19 6" />,
   sparkle: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z" /><path d="M20 2v4m-2-2h4" /></>,
   link: <><path d="m10 13 4-4m-6 6-2 2a3 3 0 0 1-4-4l4-4a3 3 0 0 1 4 0m4 0 2-2a3 3 0 0 1 4 4l-4 4a3 3 0 0 1-4 0" /></>,
+  message: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>,
+  swords: <><path d="M14.5 17.5 18 21l3-3-3.5-3.5" /><path d="m4 20 4-4" /><path d="m14.5 4.5-9 9 3 3 9-9-3-3Z" /></>,
 } as const;
 
 export type IconName = keyof typeof paths;

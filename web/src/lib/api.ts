@@ -69,6 +69,15 @@ export interface FriendCard {
   username: string;
 }
 
+export interface DirectMessageDto {
+  id: string;
+  fromId: string;
+  fromUsername: string;
+  toId: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface LeaderboardRow {
   rank: number;
   accountId: string;
@@ -252,6 +261,12 @@ export const api = {
     request<{ ok: boolean }>('/friends/accept', 'POST', { id }, token),
   declineFriend: (id: string, token: string) =>
     request<{ ok: boolean }>('/friends/decline', 'POST', { id }, token),
+  friendStatus: (id: string, token: string) =>
+    request<{ status: 'none' | 'friends' | 'requested' | 'incoming' }>(`/friends/status?id=${encodeURIComponent(id)}`, 'GET', undefined, token),
+  chatSend: (to: string, text: string, token: string) =>
+    request<{ ok: boolean; message: DirectMessageDto }>('/chat/send', 'POST', { to, text }, token),
+  chatMessages: (withUser: string, token: string) =>
+    request<{ messages: DirectMessageDto[] }>(`/chat/messages?with=${encodeURIComponent(withUser)}`, 'GET', undefined, token),
 
   leaderboard: (variant = 'standard', speed = 'blitz', limit = 50) =>
     request<Board>(`/leaderboard?variant=${variant}&speed=${speed}&limit=${limit}`, 'GET'),

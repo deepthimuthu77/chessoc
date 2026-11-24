@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { api, type Profile, type RatingPoint } from '@/lib/api';
+import { useParams, useRouter } from 'next/navigation';
+import { api, type DirectMessageDto, type Profile, type RatingPoint } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { TopNav } from '@/components/ui/TopNav';
 import { JourneyNav } from '@/components/ui/PageHeading';
 import { Icon } from '@/components/ui/Icon';
 import Link from 'next/link';
 import { RatingChart } from '@/components/ui/RatingChart';
+import { Chat } from '@/components/ui/Chat';
+import type { ChatMessage } from '@/lib/protocol';
 
 export default function ProfilePage() {
   const params = useParams<{ id: string }>();
@@ -16,14 +18,26 @@ export default function ProfilePage() {
 }
 
 function ProfileContent({ id }: { id: string }) {
+  const router = useRouter();
   const { account, token, logout, handleAuthError, authError, retryAuth } = useAuth();
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ attempt: number; profile?: Profile; error?: string } | null>(null);
   const loading = result?.attempt !== attempt;
   const profile = loading ? null : result.profile;
+  const [friendship, setFriendship] = useState<'none' | 'friends' | 'requested' | 'incoming' | 'loading'>('loading');
   const [friendNote, setFriendNote] = useState<string | null>(null);
   const [friendError, setFriendError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
+  const [dmMessages, setDmMessages] = useState<DirectMessageDto[]>([]);
+  const [challengeVariant, setChallengeVariant] = useState('standard');
+  const [challengeMinutes, setChallengeMinutes] = useState(5);
+  const [challengeIncrement, setChallengeIncrement] = useState(0);
+  const [challengeColor, setChallengeColor] = useState<'random' | 'white' | 'black'>('random');
+  const [challengeRated, setChallengeRated] = useState(true);
+  const [challenging, setChallenging] = useState(false);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
   const [pool, setPool] = useState<{ variant: string; speed: string } | null>(null);
   const [historyAttempt, setHistoryAttempt] = useState(0);
   const [historyResult, setHistoryResult] = useState<{ key: string; points: RatingPoint[]; error?: string } | null>(null);
@@ -37,6 +51,48 @@ function ProfileContent({ id }: { id: string }) {
     });
     return () => { cancelled = true; };
   }, [id, attempt]);
+
+  const isSelf = account?.id === id;
+
+  useEffect(() => {
+    if (!token || !id || isSelf || id.startsWith('guest-')) {
+      setFriendship('none');
+      return;
+    }
+    let cancelled = false;
+    api.friendStatus(id, token)
+      .then(res => {
+        if (!cancelled) setFriendship(res.status);
+      })
+      .catch(() => {
+        Promise.all([api.friends(token), api.friendRequests(token)])
+          .then(([fRes, rRes]) => {
+            if (cancelled) return;
+            if (fRes.friends.some(f => f.id === id)) setFriendship('friends');
+            else if (rRes.outgoing.some(r => r.id === id)) setFriendship('requested');
+            else if (rRes.incoming.some(r => r.id === id)) setFriendship('incoming');
+            else setFriendship('none');
+          })
+          .catch(() => {
+            if (!cancelled) setFriendship('none');
+          });
+      });
+    return () => { cancelled = true; };
+  }, [id, token, isSelf]);
+
+  useEffect(() => {
+    if (!token || !id || !chatOpen) return;
+    let cancelled = false;
+    async function loadChat() {
+      try {
+        const res = await api.chatMessages(id, token!);
+        if (!cancelled) setDmMessages(res.messages);
+      } catch {}
+    }
+    loadChat();
+    const interval = setInterval(loadChat, 2500);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [token, id, chatOpen]);
 
   // Chart pool: the user's pick, else the pool with the most games. Derived, not stored.
   const topPool = profile && profile.pools.length > 0
@@ -58,8 +114,6 @@ function ProfileContent({ id }: { id: string }) {
     return () => { cancelled = true; };
   }, [id, selVariant, selSpeed, historyKey]);
 
-  const isSelf = account?.id === id;
-
   async function addFriend() {
     if (!profile || !token || adding) return;
     setAdding(true);
@@ -69,14 +123,79 @@ function ProfileContent({ id }: { id: string }) {
       if (!response.ok || !['friends', 'already_friends', 'requested'].includes(response.status)) {
         throw new Error('The friend request was not sent. Please retry.');
       }
-      setFriendNote(response.status === 'friends' ? 'You are now friends.'
-        : response.status === 'already_friends' ? 'Already friends.' : 'Request sent.');
+      if (response.status === 'friends' || response.status === 'already_friends') {
+        setFriendship('friends');
+        setFriendNote(response.status === 'friends' ? 'You are now friends.' : 'Already friends.');
+      } else {
+        setFriendship('requested');
+        setFriendNote('Request sent.');
+      }
     } catch (error) {
       if (!handleAuthError(error, token)) setFriendError(error instanceof Error ? error.message : 'Could not add friend. Please retry.');
     } finally {
       setAdding(false);
     }
   }
+
+  async function acceptFriend() {
+    if (!token || adding) return;
+    setAdding(true);
+    setFriendError(null);
+    try {
+      await api.acceptFriend(id, token);
+      setFriendship('friends');
+      setFriendNote('You are now friends.');
+    } catch (error) {
+      if (!handleAuthError(error, token)) setFriendError(error instanceof Error ? error.message : 'Could not accept friend request.');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  function sendDirectChat(text: string): boolean {
+    if (!token || !id || !text.trim()) return false;
+    api.chatSend(id, text.trim(), token)
+      .then(res => {
+        if (res.ok && res.message) {
+          setDmMessages(prev => [...prev, res.message]);
+        }
+      })
+      .catch(() => {});
+    return true;
+  }
+
+  async function createChallenge() {
+    if (!token || challenging) return;
+    setChallenging(true);
+    setChallengeError(null);
+    try {
+      const color = challengeColor === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : challengeColor;
+      const res = await api.createGame({
+        variant: challengeVariant,
+        minutes: challengeMinutes,
+        increment: challengeIncrement,
+        color,
+        rated: challengeVariant !== 'bughouse' && challengeRated,
+        vsEngine: false,
+      }, token);
+
+      const link = `${window.location.origin}/room/${res.gameId}`;
+      try {
+        await api.chatSend(id, `⚔️ I challenged you to a ${challengeMinutes}+${challengeIncrement} ${challengeVariant} game! Join here: ${link}`, token);
+      } catch {}
+
+      router.push(`/room/${res.gameId}`);
+    } catch (err) {
+      setChallengeError(err instanceof Error ? err.message : 'Could not create challenge. Please try again.');
+      setChallenging(false);
+    }
+  }
+
+  const chatMessages: ChatMessage[] = dmMessages.map(dm => ({
+    color: (dm.fromId === account?.id ? 'You' : (profile?.account.username ?? 'Friend')) as 'white',
+    text: dm.text,
+    serverTimestamp: dm.timestamp,
+  }));
 
   return (
     <main className="min-h-screen app-background text-white">
@@ -101,17 +220,175 @@ function ProfileContent({ id }: { id: string }) {
             </div>
 
             {token && !isSelf && !id.startsWith('guest-') && (
-              <button
-                type="button"
-                disabled={adding || !!friendNote}
-                onClick={addFriend}
-                className="mb-8 rounded-xl bg-accent-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-accent-500 disabled:opacity-60"
-              >
-                {adding ? 'Sending…' : friendNote ?? 'Add friend'}
-              </button>
+              <div className="mb-8 flex flex-wrap items-center gap-3">
+                {friendship === 'friends' ? (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-400">
+                      <Icon name="check" size={16} /> Friends
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setChallengeOpen(o => !o); if (!challengeOpen) setChatOpen(false); }}
+                      className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-colors ${
+                        challengeOpen ? 'bg-accent-500 text-white' : 'bg-accent-600 text-white hover:bg-accent-500'
+                      }`}
+                    >
+                      <Icon name="swords" size={18} />
+                      {challengeOpen ? 'Close Challenge' : 'Challenge'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setChatOpen(o => !o); if (!chatOpen) setChallengeOpen(false); }}
+                      className={`flex items-center gap-2 rounded-xl border px-5 py-2.5 font-bold transition-colors ${
+                        chatOpen ? 'border-accent-500 bg-accent-500/20 text-accent-300' : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Icon name="message" size={18} />
+                      {chatOpen ? 'Close Chat' : 'Chat'}
+                    </button>
+                  </>
+                ) : friendship === 'requested' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60 px-4 py-2.5 text-sm font-medium text-zinc-400">
+                    <Icon name="clock" size={16} /> Request sent
+                  </span>
+                ) : friendship === 'incoming' ? (
+                  <button
+                    type="button"
+                    disabled={adding}
+                    onClick={acceptFriend}
+                    className="rounded-xl bg-accent-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-accent-500 disabled:opacity-60"
+                  >
+                    {adding ? 'Accepting…' : 'Accept friend request'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={adding || !!friendNote}
+                    onClick={addFriend}
+                    className="rounded-xl bg-accent-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-accent-500 disabled:opacity-60"
+                  >
+                    {adding ? 'Sending…' : friendNote ?? 'Add friend'}
+                  </button>
+                )}
+              </div>
             )}
             {friendNote && <p role="status" className="mb-4 text-accent-400">{friendNote}</p>}
-            {friendError && <p role="alert" className="mb-4 text-rose-400">{friendError} Use Add friend to retry.</p>}
+            {friendError && <p role="alert" className="mb-4 text-rose-400">{friendError}</p>}
+
+            {challengeOpen && (
+              <div className="surface mb-8 rounded-2xl border border-accent-500/30 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-base font-semibold text-white">Challenge {profile.account.username}</h2>
+                    <p className="text-xs text-zinc-400">Choose game settings and invite them directly.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setChallengeOpen(false)}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                    aria-label="Close challenge"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <label className="field-label mb-2">Variant</label>
+                    <div className="segmented" role="group">
+                      {(['standard', 'crazyhouse', 'bughouse'] as const).map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-pressed={challengeVariant === v}
+                          onClick={() => setChallengeVariant(v)}
+                          className="segment capitalize"
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="field-label mb-2">Your color</label>
+                    <div className="segmented" role="group">
+                      {(['random', 'white', 'black'] as const).map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          aria-pressed={challengeColor === c}
+                          onClick={() => setChallengeColor(c)}
+                          className="segment capitalize"
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="field-label mb-2">Time control</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: '3 min · Blitz', m: 3, inc: 0 },
+                        { label: '5 min · Blitz', m: 5, inc: 0 },
+                        { label: '10 min · Rapid', m: 10, inc: 0 },
+                        { label: '1 min · Bullet', m: 1, inc: 0 },
+                      ].map(tc => {
+                        const selected = challengeMinutes === tc.m && challengeIncrement === tc.inc;
+                        return (
+                          <button
+                            key={tc.label}
+                            type="button"
+                            onClick={() => { setChallengeMinutes(tc.m); setChallengeIncrement(tc.inc); }}
+                            className={`rounded-xl border p-3 text-left transition-colors ${
+                              selected ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900'
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold">{tc.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {challengeError && <p role="alert" className="mt-3 text-sm text-rose-400">{challengeError}</p>}
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={challenging}
+                    onClick={() => setChallengeOpen(false)}
+                    className="rounded-xl border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={challenging}
+                    onClick={createChallenge}
+                    className="button-primary"
+                  >
+                    {challenging ? 'Starting challenge…' : 'Start challenge'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {chatOpen && (
+              <div className="surface mb-8 overflow-hidden rounded-2xl border border-zinc-800">
+                <Chat
+                  messages={chatMessages}
+                  onSend={sendDirectChat}
+                  disabled={!token}
+                  title={`Chat with ${profile.account.username}`}
+                  subtitle="Direct conversation"
+                  onClose={() => setChatOpen(false)}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4">
               <Stat label="Wins" value={profile.stats.wins} accent="text-green-400" />

@@ -291,6 +291,52 @@ class HttpAuthApiTest {
         assertThat(friendsOf(aliceToken).path("friends").get(0).path("username").asText()).isEqualTo("bob2");
     }
 
+    @Test
+    void friendStatusAndDirectChat() throws Exception {
+        JsonNode u1 = post("/auth/register", "{\"username\":\"chatUser1\",\"email\":\"cu1@x.com\",\"password\":\"secret1\"}", null);
+        String t1 = u1.path("token").asText();
+        String id1 = u1.path("account").path("id").asText();
+
+        JsonNode u2 = post("/auth/register", "{\"username\":\"chatUser2\",\"email\":\"cu2@x.com\",\"password\":\"secret1\"}", null);
+        String t2 = u2.path("token").asText();
+        String id2 = u2.path("account").path("id").asText();
+
+        // Initially none
+        assertThat(get("/friends/status?id=" + id2, t1).path("status").asText()).isEqualTo("none");
+
+        // Request sent from u1 to u2
+        post("/friends/add", "{\"username\":\"chatUser2\"}", t1);
+        assertThat(get("/friends/status?id=" + id2, t1).path("status").asText()).isEqualTo("requested");
+        assertThat(get("/friends/status?id=" + id1, t2).path("status").asText()).isEqualTo("incoming");
+
+        // u2 accepts
+        post("/friends/accept", "{\"id\":\"" + id1 + "\"}", t2);
+        assertThat(get("/friends/status?id=" + id2, t1).path("status").asText()).isEqualTo("friends");
+        assertThat(get("/friends/status?id=" + id1, t2).path("status").asText()).isEqualTo("friends");
+
+        // Send direct message
+        JsonNode sendRes = post("/chat/send", "{\"to\":\"" + id2 + "\",\"text\":\"Hello friend!\"}", t1);
+        assertThat(sendRes.path("ok").asBoolean()).isTrue();
+        assertThat(sendRes.path("message").path("text").asText()).isEqualTo("Hello friend!");
+
+        // Fetch messages for both sides
+        JsonNode m1 = get("/chat/messages?with=" + id2, t1);
+        assertThat(m1.path("messages").get(0).path("text").asText()).isEqualTo("Hello friend!");
+
+        JsonNode m2 = get("/chat/messages?with=" + id1, t2);
+        assertThat(m2.path("messages").get(0).path("text").asText()).isEqualTo("Hello friend!");
+    }
+
+    private JsonNode get(String path, String token) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + api.port() + path))
+                .GET();
+        if (token != null) {
+            b.header("Authorization", "Bearer " + token);
+        }
+        return mapper.readTree(client.send(b.build(), HttpResponse.BodyHandlers.ofString()).body());
+    }
+
     private JsonNode friendsOf(String token) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + api.port() + "/friends"))

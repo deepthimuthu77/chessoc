@@ -23,7 +23,7 @@ export const MessageType = {
 } as const;
 
 export interface ChatMessage {
-  color: 'white' | 'black' | 'spectator';
+  color: 'white' | 'black' | 'spectator' | (string & {});
   text: string;
   serverTimestamp: number;
 }

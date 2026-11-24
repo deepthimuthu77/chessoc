@@ -21,7 +21,43 @@ const COLOR: Record<string, string> = {
   spectator: 'text-accent-400',
 };
 
-export function Chat({ messages, onSend, disabled = false, failure }: { messages: ChatMessage[]; onSend: (text: string) => boolean; disabled?: boolean; failure?: { message: string; text: string } | null }) {
+function renderChatText(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) =>
+    urlRegex.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent-300 underline transition-colors hover:text-accent-200"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
+
+export function Chat({
+  messages,
+  onSend,
+  disabled = false,
+  failure,
+  title = 'At the table',
+  subtitle = 'Room chat',
+  onClose,
+}: {
+  messages: ChatMessage[];
+  onSend: (text: string) => boolean;
+  disabled?: boolean;
+  failure?: { message: string; text: string } | null;
+  title?: string;
+  subtitle?: string;
+  onClose?: () => void;
+}) {
   const [text, setText] = useState('');
   const [sendFailed, setSendFailed] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -89,7 +125,20 @@ export function Chat({ messages, onSend, disabled = false, failure }: { messages
   return (
     <div ref={rootRef} className="surface relative flex min-h-80 w-full flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
-        <h3 className="text-xs font-medium text-zinc-200">At the table</h3><span className="text-[10px] text-zinc-500">Room chat</span>
+        <div>
+          <h3 className="text-xs font-medium text-zinc-200">{title}</h3>
+          <span className="text-[10px] text-zinc-500">{subtitle}</span>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close chat"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
       </div>
       <div ref={scrollRef} role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions" className="max-h-48 min-h-32 flex-1 space-y-1 overflow-y-auto p-3">
         {messages.length === 0 ? (
@@ -97,8 +146,8 @@ export function Chat({ messages, onSend, disabled = false, failure }: { messages
         ) : (
           messages.map((m, i) => (
             <div key={i} className="text-sm">
-              <span className={`font-bold ${COLOR[m.color] ?? 'text-zinc-400'}`}>{LABEL[m.color] ?? '?'}:</span>{' '}
-              <span className="whitespace-pre-wrap break-words text-zinc-300 [overflow-wrap:anywhere]">{m.text}</span>
+              <span className={`font-bold ${COLOR[m.color] ?? ((m.color as string) === 'You' ? 'text-accent-400' : 'text-zinc-300')}`}>{LABEL[m.color] ?? m.color ?? '?'}:</span>{' '}
+              <span className="whitespace-pre-wrap break-words text-zinc-300 [overflow-wrap:anywhere]">{renderChatText(m.text)}</span>
             </div>
           ))
         )}
