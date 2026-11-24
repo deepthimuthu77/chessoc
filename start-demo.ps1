@@ -54,6 +54,13 @@ try {
         }
         $env:CHESSOC_TOKEN_SECRET = (Get-Content -LiteralPath $secretFile -Raw).Trim()
     }
+    $tunnelTokenFile = Join-Path $demoRoot 'tunnel-token'
+    if (-not $env:CLOUDFLARE_TUNNEL_TOKEN -and (Test-Path -LiteralPath $tunnelTokenFile)) {
+        $env:CLOUDFLARE_TUNNEL_TOKEN = (Get-Content -LiteralPath $tunnelTokenFile -Raw).Trim()
+    }
+    if ($env:CLOUDFLARE_TUNNEL_TOKEN) {
+        $env:CLOUDFLARE_TUNNEL_COMMAND = "tunnel --protocol http2 --no-autoupdate run --token $env:CLOUDFLARE_TUNNEL_TOKEN"
+    }
     if (-not $LocalOnly) { $composeArgs += @('--profile', 'public') }
     else {
         & docker @composeArgs --profile public stop tunnel
@@ -95,24 +102,51 @@ try {
         if ($LASTEXITCODE -ne 0 -or -not $tunnelStartedAt) { throw 'Cannot read tunnel start time.' }
         $tunnelUrl = $null
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-        do {
-            $logs = (& docker @composeArgs logs --no-color --since $tunnelStartedAt tunnel 2>&1 | Out-String)
-            $urls = [regex]::Matches($logs, 'https://[a-z0-9-]+\.trycloudflare\.com')
-            if ($urls.Count -gt 0) { $tunnelUrl = $urls[$urls.Count - 1].Value; break }
-            Start-Sleep -Seconds 2
-        } while ((Get-Date) -lt $deadline)
+        if ($env:CLOUDFLARE_TUNNEL_TOKEN) {
+            $tunnelUrl = 'https://chess.deepthimuthukumar.in'
+            do {
+                $logs = (& docker @composeArgs logs --no-color --since $tunnelStartedAt tunnel 2>&1 | Out-String)
+                if ($logs -match 'Registered tunnel connection|Connected to') { break }
+                Start-Sleep -Seconds 2
+            } while ((Get-Date) -lt $deadline)
+        } else {
+            do {
+                $logs = (& docker @composeArgs logs --no-color --since $tunnelStartedAt tunnel 2>&1 | Out-String)
+                $urls = [regex]::Matches($logs, 'https://[a-z0-9-]+\.trycloudflare\.com')
+                if ($urls.Count -gt 0) { $tunnelUrl = $urls[$urls.Count - 1].Value; break }
+                Start-Sleep -Seconds 2
+            } while ((Get-Date) -lt $deadline)
+        }
         if (-not $tunnelUrl) { throw 'No public URL was issued. Check: docker compose -f backend/docker-compose.yml --profile public logs tunnel' }
         Wait-Ready 'Public HTTPS website' {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri "$tunnelUrl/" -TimeoutSec 10
-            $response.StatusCode -eq 200 -and $response.Content -match 'Chessoc'
+            try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri "$tunnelUrl/" -TimeoutSec 10
+                $response.StatusCode -eq 200 -and $response.Content -match 'Chessoc'
+            } catch {
+                if ($tunnelUrl -match 'chess\.deepthimuthukumar\.in') {
+                    $code = (& curl.exe -s --resolve "chess.deepthimuthukumar.in:443:104.21.89.130" -o $null -w "%{http_code}" "$tunnelUrl/")
+                    $code -eq '200'
+                } else { throw }
+            }
         }
         Wait-Ready 'Public HTTPS API' {
-            $response = Invoke-RestMethod -Uri "$tunnelUrl/api/leaderboard?variant=standard&speed=blitz" -TimeoutSec 10
-            $null -ne $response.PSObject.Properties['entries']
+            try {
+                $response = Invoke-RestMethod -Uri "$tunnelUrl/api/leaderboard?variant=standard&speed=blitz" -TimeoutSec 10
+                $null -ne $response.PSObject.Properties['entries']
+            } catch {
+                if ($tunnelUrl -match 'chess\.deepthimuthukumar\.in') {
+                    $body = (& curl.exe -s --resolve "chess.deepthimuthukumar.in:443:104.21.89.130" "$tunnelUrl/api/leaderboard?variant=standard&speed=blitz")
+                    $body -match 'entries'
+                } else { throw }
+            }
         }
         $tunnelUrl | Set-Content -LiteralPath (Join-Path $demoRoot 'public-url.txt')
         Write-Host "SHARE WITH FRIENDS: $tunnelUrl" -ForegroundColor Green
-        Write-Host 'Keep Docker running. This temporary URL changes if the tunnel restarts.'
+        if ($env:CLOUDFLARE_TUNNEL_TOKEN) {
+            Write-Host 'Permanent tunnel active for chess.deepthimuthukumar.in'
+        } else {
+            Write-Host 'Keep Docker running. This temporary URL changes if the tunnel restarts.'
+        }
     }
     Write-Host "STOP COMMAND: & `"$(Join-Path $PSScriptRoot 'stop-demo.cmd')`"" -ForegroundColor Yellow
     if (-not $NoWatch) { & (Join-Path $PSScriptRoot 'watch-demo.ps1') -LocalOnly:$LocalOnly }

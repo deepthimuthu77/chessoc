@@ -22,6 +22,11 @@ function Get-DemoTunnelState([string[]]$ComposeArgs, $Previous) {
     if ($Previous -and $Previous.Container -eq $container -and $Previous.Started -eq $started -and $Previous.Url) {
         return $Previous
     }
+    $demoRoot = Join-Path $PSScriptRoot '.demo'
+    $tokenFile = Join-Path $demoRoot 'tunnel-token'
+    if ($env:CLOUDFLARE_TUNNEL_TOKEN -or (Test-Path -LiteralPath $tokenFile)) {
+        return @{ Running = $true; Container = $container; Started = $started; Url = 'https://chess.deepthimuthukumar.in' }
+    }
     $logs = (& docker @ComposeArgs logs --no-color --since $started tunnel 2>&1 | Out-String)
     $urls = [regex]::Matches($logs, 'https://[a-z0-9-]+\.trycloudflare\.com')
     $url = if ($urls.Count) { $urls[$urls.Count - 1].Value } else { $null }

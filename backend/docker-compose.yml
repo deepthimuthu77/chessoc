@@ -83,7 +83,9 @@ services:
   tunnel:
     profiles: [public]
     image: cloudflare/cloudflared:latest
-    command: [tunnel, --no-autoupdate, --url, 'http://caddy:80']
+    environment:
+      TUNNEL_TOKEN: "${CLOUDFLARE_TUNNEL_TOKEN:-}"
+    command: ${CLOUDFLARE_TUNNEL_COMMAND:-tunnel --protocol http2 --no-autoupdate --url http://caddy:80}
     depends_on:
       - caddy
     restart: unless-stopped
