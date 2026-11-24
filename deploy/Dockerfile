@@ -37,8 +37,25 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
     NEXT_TELEMETRY_DISABLED=1 \
-    PGDATA=/var/lib/postgresql/data
+    NEXT_PUBLIC_API_BASE=/api \
+    NEXT_PUBLIC_WS_BASE="" \
+    PGDATA=/var/lib/postgresql/data \
+    # Embedded Vector-64 Chess Engine Binary & Worker Settings
+    CHESSOC_VALIDATOR_CMD=/opt/vector64/vector64-validator \
+    CHESSOC_SEARCH_CMD=/opt/vector64/vector64-all \
+    CHESSOC_VALIDATOR_WORKERS=2 \
+    CHESSOC_SEARCH_WORKERS=2 \
+    ENGINE_CMD=/opt/vector64/vector64-validator \
+    # Embedded Backend Server & Internal PostgreSQL Defaults
+    CHESSOC_HTTP_PORT=8080 \
+    CHESSOC_WS_PORT=8081 \
+    CHESSOC_DB_URL=jdbc:postgresql://127.0.0.1:5432/chessoc \
+    CHESSOC_DB_USER=chessoc \
+    CHESSOC_DB_PASSWORD=chessoc \
+    PATH="/opt/vector64:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
@@ -54,6 +71,9 @@ COPY --from=caddy:2.10 /usr/bin/caddy /usr/bin/caddy
 COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
 COPY --from=engine /engine /opt/vector64
+RUN ln -sf /opt/vector64/vector64-validator /usr/local/bin/vector64-validator \
+    && ln -sf /opt/vector64/vector64-all /usr/local/bin/vector64-all \
+    && ln -sf /opt/vector64/vector64-all /usr/local/bin/vector64
 COPY --from=backend-build /home/gradle/src/build/install/chessoc-server /opt/chessoc-server
 
 WORKDIR /opt/chessoc-web
