@@ -41,6 +41,15 @@ function ProfileContent({ id }: { id: string }) {
   const [pool, setPool] = useState<{ variant: string; speed: string } | null>(null);
   const [historyAttempt, setHistoryAttempt] = useState(0);
   const [historyResult, setHistoryResult] = useState<{ key: string; points: RatingPoint[]; error?: string } | null>(null);
+  const [lastSeen, setLastSeen] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const stored = localStorage.getItem(`chessoc_seen_${id}`);
+      return stored ? parseInt(stored, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +90,7 @@ function ProfileContent({ id }: { id: string }) {
   }, [id, token, isSelf]);
 
   useEffect(() => {
-    if (!token || !id || !chatOpen) return;
+    if (!token || !id || isSelf || id.startsWith('guest-')) return;
     let cancelled = false;
     async function loadChat() {
       try {
@@ -90,9 +99,22 @@ function ProfileContent({ id }: { id: string }) {
       } catch {}
     }
     loadChat();
-    const interval = setInterval(loadChat, 2500);
+    const interval = setInterval(loadChat, chatOpen ? 2000 : 3500);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [token, id, chatOpen]);
+  }, [token, id, chatOpen, isSelf]);
+
+  const unseenMessages = dmMessages.filter(m => m.fromId === id && m.timestamp > lastSeen);
+  const unseenCount = unseenMessages.length;
+
+  useEffect(() => {
+    if (chatOpen && dmMessages.length > 0) {
+      const latest = Math.max(...dmMessages.map(m => m.timestamp), Date.now());
+      setLastSeen(latest);
+      try {
+        localStorage.setItem(`chessoc_seen_${id}`, String(latest));
+      } catch {}
+    }
+  }, [chatOpen, dmMessages, id]);
 
   // Chart pool: the user's pick, else the pool with the most games. Derived, not stored.
   const topPool = profile && profile.pools.length > 0
@@ -236,16 +258,47 @@ function ProfileContent({ id }: { id: string }) {
                       <Icon name="swords" size={18} />
                       {challengeOpen ? 'Close Challenge' : 'Challenge'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => { setChatOpen(o => !o); if (!chatOpen) setChallengeOpen(false); }}
-                      className={`flex items-center gap-2 rounded-xl border px-5 py-2.5 font-bold transition-colors ${
-                        chatOpen ? 'border-accent-500 bg-accent-500/20 text-accent-300' : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Icon name="message" size={18} />
-                      {chatOpen ? 'Close Chat' : 'Chat'}
-                    </button>
+                    <div className="relative">
+                      {unseenCount > 0 && !chatOpen && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setChatOpen(true)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') setChatOpen(true); }}
+                          aria-label={`${unseenCount} unread message${unseenCount > 1 ? 's' : ''} from ${profile.account.username}. Click to open chat.`}
+                          className="absolute -top-14 left-0 z-30 flex cursor-pointer items-center gap-2 rounded-xl border border-accent-400/50 bg-zinc-900 px-3 py-1.5 text-xs text-white shadow-2xl transition-all hover:scale-105"
+                        >
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-75"></span>
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-500"></span>
+                          </span>
+                          <span className="font-semibold text-accent-300">{profile.account.username}:</span>
+                          <span className="max-w-[140px] truncate text-zinc-300">
+                            {unseenMessages[unseenMessages.length - 1]?.text}
+                          </span>
+                          <div className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-accent-400/50 bg-zinc-900" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setChatOpen(o => !o); if (!chatOpen) setChallengeOpen(false); }}
+                        className={`relative flex items-center gap-2 rounded-xl border px-5 py-2.5 font-bold transition-colors ${
+                          chatOpen
+                            ? 'border-accent-500 bg-accent-500/20 text-accent-300'
+                            : unseenCount > 0
+                            ? 'border-accent-400 bg-accent-500/15 text-accent-200 hover:bg-accent-500/25'
+                            : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <Icon name="message" size={18} />
+                        <span>{chatOpen ? 'Close Chat' : 'Chat'}</span>
+                        {unseenCount > 0 && !chatOpen && (
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-extrabold text-white shadow-lg animate-pulse">
+                            {unseenCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </>
                 ) : friendship === 'requested' ? (
                   <span className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60 px-4 py-2.5 text-sm font-medium text-zinc-400">
@@ -385,6 +438,7 @@ function ProfileContent({ id }: { id: string }) {
                   disabled={!token}
                   title={`Chat with ${profile.account.username}`}
                   subtitle="Direct conversation"
+                  bubbles={true}
                   onClose={() => setChatOpen(false)}
                 />
               </div>

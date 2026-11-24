@@ -49,6 +49,7 @@ export function Chat({
   title = 'At the table',
   subtitle = 'Room chat',
   onClose,
+  bubbles = false,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => boolean;
@@ -57,6 +58,7 @@ export function Chat({
   title?: string;
   subtitle?: string;
   onClose?: () => void;
+  bubbles?: boolean;
 }) {
   const [text, setText] = useState('');
   const [sendFailed, setSendFailed] = useState(false);
@@ -140,16 +142,37 @@ export function Chat({
           </button>
         )}
       </div>
-      <div ref={scrollRef} role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions" className="max-h-48 min-h-32 flex-1 space-y-1 overflow-y-auto p-3">
+      <div ref={scrollRef} role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions" className="max-h-60 min-h-36 flex-1 space-y-2 overflow-y-auto p-3">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm italic text-zinc-600">Say hello…</div>
         ) : (
-          messages.map((m, i) => (
-            <div key={i} className="text-sm">
-              <span className={`font-bold ${COLOR[m.color] ?? ((m.color as string) === 'You' ? 'text-accent-400' : 'text-zinc-300')}`}>{LABEL[m.color] ?? m.color ?? '?'}:</span>{' '}
-              <span className="whitespace-pre-wrap break-words text-zinc-300 [overflow-wrap:anywhere]">{renderChatText(m.text)}</span>
-            </div>
-          ))
+          messages.map((m, i) => {
+            const isMe = (m.color as string) === 'You';
+            if (bubbles) {
+              return (
+                <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                      isMe
+                        ? 'rounded-tr-sm border border-accent-500/30 bg-accent-500/20 text-accent-100'
+                        : 'rounded-tl-sm border border-zinc-700/60 bg-zinc-800 text-zinc-100'
+                    }`}
+                  >
+                    <div className={`mb-0.5 text-[10px] font-semibold ${isMe ? 'text-accent-300' : 'text-zinc-400'}`}>
+                      {LABEL[m.color] ?? m.color ?? '?'}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{renderChatText(m.text)}</div>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={i} className="text-sm">
+                <span className={`font-bold ${COLOR[m.color] ?? (isMe ? 'text-accent-400' : 'text-zinc-300')}`}>{LABEL[m.color] ?? m.color ?? '?'}:</span>{' '}
+                <span className="whitespace-pre-wrap break-words text-zinc-300 [overflow-wrap:anywhere]">{renderChatText(m.text)}</span>
+              </div>
+            );
+          })
         )}
       </div>
       {emojiOpen && !disabled && <div id={`${id}-emoji`} role="group" aria-label="Choose an emoji" className="frosted-panel absolute inset-x-2 bottom-[4.5rem] z-10 rounded-xl p-3">
