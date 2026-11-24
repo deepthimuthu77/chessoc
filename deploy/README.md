@@ -1,117 +1,106 @@
-# Chessoc VPS Deployment Guide
+# Chessoc Production Deployment & Engine Hosting Guide
 
-This directory provides the standalone, all-in-one production Docker image for Chessoc.
-
-The image bundles:
-- **Vector-64 Chess Engine** (Linux v1.1.1 engine binary + validator)
-- **Java 17 Backend Monolith** (Sun HttpServer + WebSocket transport on 8080/8081)
-- **Next.js Web Frontend** (Standalone production build on port 3000)
-- **Embedded PostgreSQL Database** (Auto-initialized with schema on first run)
-- **Caddy Reverse Proxy** (With automatic Let's Encrypt HTTPS support)
-- **Cloudflared Tunnel** (Optional built-in Cloudflare Zero Trust tunnel)
+This directory provides the standalone, production-ready all-in-one Docker image and orchestration scripts for **Chessoc** — a self-hosted chess platform and engine hosting infrastructure.
 
 ---
 
-## 1. Quick Start (Single Docker Command)
+## 📦 What the Image Bundles
 
-### Option A: Running with HTTP on Port 80
+* **Vector-64 Chess Engine v1.1.1**: Embedded Linux x86_64 binaries (`vector64-all` with NNUE weights + `vector64-validator`).
+* **PostgreSQL 16**: Embedded relational database, auto-initialized with schema on first launch.
+* **Java 17 Game Server**: High-throughput Sun `HttpServer` (API) + `Java-WebSocket` (real-time game synchronization) on ports 8080/8081.
+* **Next.js Web Frontend**: Standalone optimized production build on port 3000.
+* **Caddy Reverse Proxy**: Edge router with automatic Let's Encrypt SSL/TLS certificates on port 80/443.
+* **Cloudflare Zero Trust Tunnel**: Embedded `cloudflared` client for zero-inbound-port deployments.
+
+---
+
+## 🚀 Quick Start on Any Linux VPS
+
+### Recommended: Production Run (All State Under `/opt/chess`)
+
+To keep your VPS organized and ensure all database records, user profiles, and keys are stored in one place:
+
 ```bash
+mkdir -p /opt/chess/data /opt/chess/secrets
+cd /opt/chess
+
+# If your VPS already has other Docker services running, create an isolated bridge:
+docker network create chess_net 2>/dev/null || true
+
 docker run -d \
   --name chessoc \
+  --network chess_net \
   --restart unless-stopped \
-  -p 80:80 \
-  -v chessoc_pgdata:/var/lib/postgresql/data \
-  -v chessoc_config:/var/lib/chessoc \
+  -v /opt/chess/data:/var/lib/postgresql/data \
+  -v /opt/chess/secrets:/var/lib/chessoc \
   chessoc:latest
 ```
 
-### Option B: Running with a Custom Domain & Automatic HTTPS (Let's Encrypt)
-Make sure your domain's DNS A/AAAA record points to your VPS IP address:
+---
+
+## 🌐 Domain & SSL Options
+
+### Option 1: Direct Domain with Auto-HTTPS (Ports 80 & 443)
+If your domain DNS points directly to your VPS IP address:
+
 ```bash
 docker run -d \
   --name chessoc \
+  --network chess_net \
   --restart unless-stopped \
   -p 80:80 \
   -p 443:443 \
   -e DOMAIN="chess.yourdomain.com" \
-  -v chessoc_pgdata:/var/lib/postgresql/data \
-  -v chessoc_config:/var/lib/chessoc \
+  -v /opt/chess/data:/var/lib/postgresql/data \
+  -v /opt/chess/secrets:/var/lib/chessoc \
   -v chessoc_caddy:/data \
   chessoc:latest
 ```
 
-### Option C: Running Behind Cloudflare Zero Trust Tunnel
+### Option 2: Cloudflare Zero Trust Tunnel (Zero Open Inbound Ports)
+If routing through a Cloudflare Tunnel:
+
 ```bash
 docker run -d \
   --name chessoc \
+  --network chess_net \
   --restart unless-stopped \
-  -e CLOUDFLARE_TUNNEL_TOKEN="<your-tunnel-token>" \
-  -v chessoc_pgdata:/var/lib/postgresql/data \
-  -v chessoc_config:/var/lib/chessoc \
+  -e CLOUDFLARE_TUNNEL_TOKEN="your-token" \
+  -v /opt/chess/data:/var/lib/postgresql/data \
+  -v /opt/chess/secrets:/var/lib/chessoc \
   chessoc:latest
 ```
 
 ---
 
-## 2. Running with Docker Compose
+## ♟️ Custom Engine & Tournament Hosting
 
-On your VPS, copy `deploy/docker-compose.yml` and run:
+Chessoc has zero chess rules hardcoded in the server. You can swap the bundled Vector-64 engine for any UCI engine (Stockfish, Komodo, LC0, Torch, or custom research engines).
+
+### Mounting a Custom Engine Binary
+Mount your engine executable into the container and point the worker pool to it:
 
 ```bash
-docker compose up -d
-```
-
-To configure your domain or Cloudflare tunnel, create a `.env` file beside `docker-compose.yml`:
-```env
-DOMAIN=chess.yourdomain.com
-CLOUDFLARE_TUNNEL_TOKEN=
+docker run -d \
+  --name chessoc \
+  --network chess_net \
+  -v /path/to/my-stockfish:/opt/engine/stockfish:ro \
+  -e CHESSOC_VALIDATOR_CMD="/opt/engine/stockfish" \
+  -e CHESSOC_SEARCH_CMD="/opt/engine/stockfish" \
+  -e CHESSOC_VALIDATOR_WORKERS=4 \
+  -e CHESSOC_SEARCH_WORKERS=2 \
+  -v /opt/chess/data:/var/lib/postgresql/data \
+  -v /opt/chess/secrets:/var/lib/chessoc \
+  chessoc:latest
 ```
 
 ---
 
-## 3. How to Build the Image
+## 🧹 Complete Uninstallation / Cleanup
 
-### Building directly on your VPS
-Clone the repository and build:
+To completely remove Chessoc, its database, its container, and its image from your VPS without touching any other services:
+
 ```bash
-git clone https://github.com/deepthimuthu77/chessoc.git
-cd chessoc
-docker build -t chessoc:latest -f Dockerfile.vps .
+docker rm -f chessoc && docker rmi chessoc:latest && docker network rm chess_net && rm -rf /opt/chess
 ```
-
-### Building locally and pushing to Docker Hub or GHCR
-```bash
-# Build
-docker build -t your-dockerhub-username/chessoc:latest -f Dockerfile.vps .
-
-# Push
-docker push your-dockerhub-username/chessoc:latest
-
-# On your VPS:
-docker run -d -p 80:80 -p 443:443 -e DOMAIN=chess.yourdomain.com your-dockerhub-username/chessoc:latest
-```
-
----
-
-## 4. Environment Variables Reference
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `DOMAIN` | *(none)* | Your public domain name (e.g. `chess.example.com`). Automatically configures Caddy for Let's Encrypt SSL/TLS. |
-| `CLOUDFLARE_TUNNEL_TOKEN` | *(none)* | Token for Cloudflare Zero Trust Named Tunnel. Automatically connects via HTTP/2 over port 443. |
-| `CHESSOC_TOKEN_SECRET` | *(auto-generated)* | HMAC session signing key. Persisted in `/var/lib/chessoc/token-secret` across restarts. |
-| `CHESSOC_DB_URL` | `jdbc:postgresql://127.0.0.1:5432/chessoc` | JDBC connection string. Set to point to an external Postgres database if preferred. |
-| `CHESSOC_DB_USER` | `chessoc` | Database username. |
-| `CHESSOC_DB_PASSWORD` | `chessoc` | Database password. |
-| `CHESSOC_VALIDATOR_WORKERS`| `2` | Number of engine validation worker threads. |
-| `CHESSOC_SEARCH_WORKERS` | `2` | Number of engine search worker threads. |
-
----
-
-## 5. Persistent Volumes
-
-| Container Path | Host Volume | Description |
-|---|---|---|
-| `/var/lib/postgresql/data` | `chessoc_pgdata` | Stores your database files, accounts, ratings, friends, and game history. |
-| `/var/lib/chessoc` | `chessoc_config` | Stores the token secret so sessions survive container restarts. |
-| `/data` | `chessoc_caddy` | Stores Caddy SSL certificates and ACME keys (for HTTPS renewals). |
