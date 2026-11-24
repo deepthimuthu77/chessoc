@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface GameControlsProps {
   active: boolean;
@@ -28,14 +28,21 @@ export function GameControls({
   onRespondDraw,
 }: GameControlsProps) {
   const [confirmResign, setConfirmResign] = useState(false);
+  const cancelResign = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!confirmResign) return;
-    const id = setTimeout(() => setConfirmResign(false), 3000);
-    return () => clearTimeout(id);
+    if (confirmResign) cancelResign.current?.focus();
   }, [confirmResign]);
 
   if (!active) return null;
+
+  if (confirmResign && !canAbort) return <div className="surface w-full p-4" role="group" aria-label="Confirm resignation">
+    <p className="mb-3 text-sm text-zinc-200">Resign this game? Your opponent wins.</p>
+    <div className="flex gap-2">
+      <button ref={cancelResign} type="button" onClick={() => setConfirmResign(false)} className="button-secondary flex-1">Cancel</button>
+      <button type="button" onClick={() => { onResign(); setConfirmResign(false); }} className="button-danger flex-1">Resign game</button>
+    </div>
+  </div>;
 
   if (drawOffer === 'incoming') {
     return (
@@ -79,20 +86,13 @@ export function GameControls({
           onClick={() => {
             if (!requireConfirm) {
               onResign();
-            } else if (confirmResign) {
-              onResign();
-              setConfirmResign(false);
             } else {
               setConfirmResign(true);
             }
           }}
-          className={
-            confirmResign
-              ? 'flex-1 rounded-xl bg-rose-600 px-4 py-3 font-bold text-white transition-colors hover:bg-rose-500'
-              : 'flex-1 rounded-xl border border-rose-500/30 px-4 py-3 font-bold text-rose-400 transition-colors hover:bg-rose-500/10'
-          }
+          className="flex-1 rounded-xl border border-rose-500/30 px-4 py-3 font-bold text-rose-400 transition-colors hover:bg-rose-500/10"
         >
-          {confirmResign ? 'Confirm resign?' : 'Resign'}
+          Resign
         </button>
       )}
       {showDraw && <button

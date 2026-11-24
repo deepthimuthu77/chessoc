@@ -18,7 +18,7 @@ export default function UpgradePage() {
   const pending = useRef(false);
 
   if (!ready || !account) {
-    return <main className="min-h-screen bg-slate-950" />;
+    return <main className="min-h-screen app-background p-6 text-zinc-300"><p role="status">{ready ? 'Redirecting to sign in…' : 'Loading account…'}</p></main>;
   }
 
   async function submit(e: React.FormEvent) {
@@ -41,23 +41,24 @@ export default function UpgradePage() {
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
       <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
-        <PageHeading eyebrow="A PLACE TO BELONG" title="Make yourself at home." description="Keep your guest progress, your games, and your place at the table." />
+        <PageHeading eyebrow="KEEP YOUR PROGRESS" title="Create an account" description="Choose your player name and keep the games and ratings from your guest session." />
         {isGuest ? (
           <p className="mb-6 text-sm text-zinc-500">Keep the games and ratings from your guest session.</p>
         ) : (
           <p className="mb-6 text-sm text-amber-400">You already have a registered account.</p>
         )}
 
-        <form onSubmit={submit} className="surface flex max-w-xl flex-col gap-4 p-6"><div className="mb-2 flex items-center gap-3"><span className="icon-well"><Icon name="knight" size={20} /></span><h2 className="text-sm font-medium">Your next chapter</h2></div>
+        <form onSubmit={submit} className="surface flex max-w-xl flex-col gap-4 p-6"><div className="mb-2 flex items-center gap-3"><span className="icon-well"><Icon name="knight" size={20} /></span><h2 className="text-sm font-medium">Account details</h2></div>
           <label className="field-label" htmlFor="join-username">Username</label>
           <input
             id="join-username"
-            aria-label="Username" required minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" autoComplete="username" disabled={busy || !isGuest}
+            aria-label="Username" aria-describedby="join-username-help" title="Use 3–20 letters, numbers or underscores." required minLength={3} maxLength={20} pattern="[a-zA-Z0-9_]{3,20}" autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy || !isGuest}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
             className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
+          <p id="join-username-help" className="-mt-2 text-xs text-zinc-500">3–20 letters, numbers or underscores.</p>
           <label className="field-label" htmlFor="join-email">Email</label>
           <input
             id="join-email"
@@ -72,12 +73,13 @@ export default function UpgradePage() {
           <input
             id="join-password"
             type="password"
-            aria-label="Password" required minLength={6} autoComplete="new-password" disabled={busy || !isGuest}
+            aria-label="Password" aria-describedby="join-password-help" required minLength={6} autoComplete="new-password" disabled={busy || !isGuest}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-600 outline-none focus:border-accent-500"
           />
+          <p id="join-password-help" className="-mt-2 text-xs text-zinc-500">At least 6 characters.</p>
           {error && <p role="alert" className="text-sm font-medium text-rose-400">{error}</p>}
           <button
             type="submit"

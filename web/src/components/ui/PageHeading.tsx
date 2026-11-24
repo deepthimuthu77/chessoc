@@ -11,11 +11,11 @@ export function FeatureLink({ href, icon, title, detail }: { href: string; icon:
 }
 
 const DESTINATIONS = {
-  play: { href: '/', icon: 'play', title: 'Back to the board', detail: 'Your next game, your way.' },
-  watch: { href: '/watch', icon: 'watch', title: 'Take a front-row seat', detail: 'Live boards. Four games, one view.' },
-  friends: { href: '/friends', icon: 'people', title: 'Better with company', detail: 'Find your people. Play together.' },
-  history: { href: '/history', icon: 'history', title: 'Every move has a story', detail: 'Revisit your games and analyze positions.' },
-  leaderboard: { href: '/leaderboard', icon: 'trophy', title: 'Find your next benchmark', detail: 'Explore the club rankings.' },
+  play: { href: '/', icon: 'play', title: 'Play a game', detail: 'Choose your variant, time and opponent.' },
+  watch: { href: '/watch', icon: 'watch', title: 'Watch live games', detail: 'Follow matches and manage your pinned games.' },
+  friends: { href: '/friends', icon: 'people', title: 'Friends', detail: 'Add players and manage friend requests.' },
+  history: { href: '/history', icon: 'history', title: 'Game history', detail: 'Replay your games and analyze positions.' },
+  leaderboard: { href: '/leaderboard', icon: 'trophy', title: 'Rankings', detail: 'Compare ratings by variant and speed.' },
 } satisfies Record<string, { href: string; icon: IconName; title: string; detail: string }>;
 
 export function JourneyNav({ destinations = ['play', 'watch', 'history'] }: { destinations?: (keyof typeof DESTINATIONS)[] }) {

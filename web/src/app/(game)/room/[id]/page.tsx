@@ -67,13 +67,13 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       <div className="mx-auto max-w-[994px]">
         <RoomNavigation spectator={game.isSpectator} />
-        <header className="mb-5 mt-7 flex flex-wrap items-center justify-between gap-4">
-          <div><p className="eyebrow mb-2">{game.isSpectator ? 'THE LIVE GALLERY' : game.isVsEngine ? 'ENGINE PRACTICE' : 'AT THE BOARD'}</p><h1 className="font-serif text-3xl tracking-tight">{game.isCrazyhouse ? 'Crazyhouse' : 'Chess'}<span className="ml-3 text-sm font-normal text-zinc-500">{game.isSpectator ? 'Live room' : game.isVsEngine ? 'A worthy opponent awaits.' : 'A game between friends.'}</span></h1></div>
+        <header className="room-heading">
+          <div><h1 className="font-serif text-3xl tracking-tight">{game.isCrazyhouse ? 'Crazyhouse' : 'Chess'}</h1><p className="mt-1 text-xs text-zinc-500">{game.isSpectator ? 'Watching live' : game.isVsEngine ? 'Playing the computer' : 'Playing a friend'}</p></div>
           <span role="status" className="live-pill"><span className="live-dot" />{game.result ? 'Game complete' : game.status !== 'connected' ? 'Connecting' : game.pendingMove ? 'Sending move' : game.interactive ? 'Your move' : game.seatsFilled < 2 ? 'Waiting for a player' : game.isSpectator ? 'Watching live' : 'Opponent’s move'}</span>
         </header>
         {game.result && <FinishedGame reviewId={game.reviewId} onShowResult={() => setDismissedRoom(null)} />}
-        {!game.result && !game.isVsEngine && !game.isSpectator && game.seatsFilled < 2 && <div className="mb-5"><InviteLinks roomId={game.roomId} availableSeats={[]} /></div>}
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_290px] xl:gap-8">
+        {game.connected && !game.result && !game.isVsEngine && !game.isSpectator && game.seatsFilled < 2 && <div className="mb-5"><InviteLinks roomId={game.roomId} availableSeats={[]} /></div>}
+        <div className={`room-layout ${game.isDropVariant ? 'room-layout-drop' : ''}`}>
           <section className="min-w-0" aria-label="Game board and players">
             <PlayerPanel label={game.isSpectator ? 'Black' : 'Opponent'} name={game.color === 'black' ? game.whiteName : game.blackName} clock={roomClock(game, game.color === 'black' ? 'white' : 'black')} captured={game.opponent.captured} score={game.opponent.score} />
             {game.isDropVariant && <div className="my-3"><Hand pieces={game.oppHand} /></div>}
@@ -88,10 +88,10 @@ function Room({ roomId, preferredSeat }: { roomId: string; preferredSeat: string
             {game.premove && <p className="mt-3 text-center text-xs text-zinc-400">Premove queued · <button type="button" onClick={game.clearPremove} className="text-accent-300 underline">Cancel</button></p>}
           </section>
           <aside className="grid gap-4" aria-label="Game details">
-            <MoveHistory history={game.history} />
             <GameControls active={game.active} canAbort={game.canAbort} canOfferDraw={game.canOfferDraw} showDraw={!game.isVsEngine} drawOffer={game.drawOffer} requireConfirm={game.confirmResign} onResign={game.resign} onAbort={game.abort} onOfferDraw={game.offerDraw} onRespondDraw={game.respondDraw} />
+            <MoveHistory history={game.history} />
             {!game.isVsEngine && <Chat messages={game.chat} onSend={game.sendChat} failure={game.chatFailure} disabled={game.status !== 'connected'} />}
-            <div className="surface p-3"><FeatureLink href="/watch" icon="watch" title="The live gallery" detail="See what’s happening across the club." /><FeatureLink href="/history" icon="history" title="Your game collection" detail="Every finished game, ready to revisit." /></div>
+            <div className="surface p-3"><FeatureLink href="/watch" icon="watch" title="Watch live games" detail="See what’s happening across the club." /><FeatureLink href="/history" icon="history" title="Game history" detail="Every finished game, ready to revisit." /></div>
           </aside>
         </div>
       </div>
@@ -169,8 +169,8 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
         <InviteLinks roomId={game.roomId} availableSeats={game.availableSeats} />
       </header>
 
-      <div className="mx-auto grid max-w-[1680px] gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.88fr)_18rem]">
-        <section className="min-w-0">
+      <div className="bughouse-layout mx-auto max-w-[1680px]">
+        <section className="bughouse-your-board">
           <h2 className="text-lg font-bold">Board {board}{!game.isSpectator && ' · Your board'}</h2>
           <BoardLabel title={`${game.orientation === 'white' ? 'Black' : 'White'} · Team ${game.orientation === 'white' ? blackTeam : whiteTeam}`} subtitle={playerName(game.orientation === 'white' ? 'black' : 'white')} clock={roomClock(game, game.orientation === 'white' ? 'black' : 'white')} />
           <Hand pieces={topHand} selected={selectedDrop} interactive={!game.isSpectator && game.orientation !== bottomColor && game.interactive && ready} onSelect={(piece) => setSelectedDrop((current) => current === piece ? null : piece)} />
@@ -204,7 +204,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
           <BoardLabel title={`${game.orientation === 'white' ? 'White' : 'Black'} · Team ${game.orientation === 'white' ? whiteTeam : blackTeam}`} subtitle={playerName(game.orientation)} clock={roomClock(game, game.orientation)} active={!game.isSpectator} />
         </section>
 
-        <section className="min-w-0 border-zinc-800 xl:border-l xl:pl-5">
+        <section className="bughouse-partner-board">
           <h2 className="text-lg font-bold">Board {partnerBoard}{!game.isSpectator && ' · Partner board'}</h2>
           <BoardLabel title={`${game.partner.orientation === 'white' ? 'Black' : 'White'} · Team ${game.partner.orientation === 'white' ? whiteTeam : blackTeam}`} subtitle={playerName(game.partner.orientation === 'white' ? 'black' : 'white', true)} clock={roomClock(game, game.partner.orientation === 'white' ? 'black' : 'white', true)} />
           <Hand pieces={partnerTopHand} />
@@ -222,9 +222,7 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
           <BoardLabel title={`${game.partner.orientation === 'white' ? 'White' : 'Black'} · Team ${game.partner.orientation === 'white' ? blackTeam : whiteTeam}`} subtitle={playerName(game.partner.orientation, true)} clock={roomClock(game, game.partner.orientation, true)} active={!game.isSpectator} />
         </section>
 
-        <aside className="flex min-w-0 flex-col gap-4 border-zinc-800 xl:border-l xl:pl-5">
-          <h2 className="text-sm font-bold text-zinc-400">Board {board} moves</h2>
-          <MoveHistory history={game.history} />
+        <div className="bughouse-controls">
           <GameControls
             active={game.active && ready}
             canAbort={game.canAbort}
@@ -237,6 +235,10 @@ function BughouseRoom({ game }: { game: ReturnType<typeof useGame> }) {
             onOfferDraw={game.offerDraw}
             onRespondDraw={game.respondDraw}
           />
+        </div>
+        <aside className="bughouse-details flex flex-col gap-4">
+          <h2 className="text-sm font-bold text-zinc-400">Board {board} moves</h2>
+          <MoveHistory history={game.history} />
           <Chat messages={game.chat} onSend={game.sendChat} failure={game.chatFailure} disabled={game.status !== 'connected'} />
         </aside>
       </div>

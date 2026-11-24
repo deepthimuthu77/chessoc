@@ -43,7 +43,7 @@ export function Hand({ pieces, selected = null, interactive = false, onSelect }:
             aria-pressed={on}
             onClick={() => onSelect?.(upper)}
             className={`relative h-10 w-10 rounded-lg border transition-colors disabled:cursor-default ${
-              on ? 'border-emerald-400 bg-emerald-400/15' : 'border-zinc-600 bg-zinc-300 enabled:hover:border-accent-400'
+              on ? 'border-accent-400 bg-accent-400/15' : 'border-zinc-600 bg-zinc-300 enabled:hover:border-accent-400'
             }`}
           >
             <span

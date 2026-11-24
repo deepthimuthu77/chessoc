@@ -92,10 +92,10 @@ export default function FriendsPage() {
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
       <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
-        <PageHeading eyebrow="YOUR CIRCLE" title="Better on the same board." description="Find your people, share a game, and make a good rivalry a regular thing." />
+        <PageHeading eyebrow="PLAY TOGETHER" title="Friends" description="Add players by username, manage requests and invite friends to a game." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
-        <form onSubmit={add} className="surface mb-5 flex flex-wrap gap-3 p-5"><label className="field-label w-full" htmlFor="friend-username">Invite someone into your circle</label>
+        <form onSubmit={add} className="surface mb-5 flex flex-wrap gap-3 p-5"><label className="field-label w-full" htmlFor="friend-username">Add a friend by username</label>
           <input
             id="friend-username" aria-label="Friend’s username"
             disabled={busy}

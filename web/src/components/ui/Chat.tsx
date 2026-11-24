@@ -87,11 +87,11 @@ export function Chat({ messages, onSend, disabled = false, failure }: { messages
   }
 
   return (
-    <div ref={rootRef} className="surface relative flex min-h-64 w-full flex-col overflow-hidden">
+    <div ref={rootRef} className="surface relative flex min-h-80 w-full flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
         <h3 className="text-xs font-medium text-zinc-200">At the table</h3><span className="text-[10px] text-zinc-500">Room chat</span>
       </div>
-      <div ref={scrollRef} role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions" className="h-32 flex-none space-y-1 overflow-y-auto p-3">
+      <div ref={scrollRef} role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions" className="max-h-48 min-h-32 flex-1 space-y-1 overflow-y-auto p-3">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm italic text-zinc-600">Say hello…</div>
         ) : (
@@ -103,10 +103,10 @@ export function Chat({ messages, onSend, disabled = false, failure }: { messages
           ))
         )}
       </div>
-      {emojiOpen && !disabled && <div id={`${id}-emoji`} role="group" aria-label="Choose an emoji" className="absolute inset-x-2 bottom-[4.5rem] z-10 rounded-xl border border-zinc-700 bg-zinc-900 p-3 shadow-xl">
+      {emojiOpen && !disabled && <div id={`${id}-emoji`} role="group" aria-label="Choose an emoji" className="frosted-panel absolute inset-x-2 bottom-[4.5rem] z-10 rounded-xl p-3">
         <p className="mb-2 text-xs text-zinc-400">A little expression</p>
-        <div className="grid grid-cols-8 gap-1">
-          {EMOJI.map(([emoji, label]) => <button key={label} type="button" aria-label={label} onClick={() => chooseEmoji(emoji)} className="flex min-h-8 items-center justify-center rounded-md text-lg hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">{emoji}</button>)}
+        <div className="grid grid-cols-6 gap-1">
+          {EMOJI.map(([emoji, label]) => <button key={label} type="button" aria-label={label} onClick={() => chooseEmoji(emoji)} className="flex min-h-10 items-center justify-center rounded-md text-lg hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">{emoji}</button>)}
         </div>
       </div>}
       <form onSubmit={submit} className="border-t border-zinc-800 p-2">

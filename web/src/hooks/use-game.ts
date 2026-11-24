@@ -285,7 +285,8 @@ export function useGame(room: string, preferredSeat?: string | null) {
   const myColor = color === 'spectator' ? null : color;
   const isPlayer = myColor != null;
   const isMyTurn = !!snapshot && !snapshot.result && isPlayer && snapshot.sideToMove === myColor;
-  const interactive = state.connection === 'connected' && isMyTurn && !state.pendingIntentId;
+  const interactive = state.connection === 'connected' && isMyTurn && !state.pendingIntentId
+    && state.capabilities.some((capability) => capability.kind === 'move');
 
   const pieces = useMemo(() => (snapshot ? fenToPieces(snapshot.fen) : []), [snapshot]);
   const legalMoves = useMemo(

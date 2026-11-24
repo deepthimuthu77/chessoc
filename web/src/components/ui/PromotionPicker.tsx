@@ -1,6 +1,7 @@
 "use client";
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { prefersReducedMotion } from '@/lib/settings';
 
 type Piece = 'q' | 'r' | 'b' | 'n';
 
@@ -16,6 +17,8 @@ interface PromotionPickerProps {
 }
 
 export function PromotionPicker({ open, color, onPick, onCancel }: PromotionPickerProps) {
+  const systemReduced = useReducedMotion();
+  const reduce = systemReduced || prefersReducedMotion();
   const y = color === 'white' ? '0%' : '100%';
 
   return (
@@ -24,16 +27,18 @@ export function PromotionPicker({ open, color, onPick, onCancel }: PromotionPick
         <motion.div
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          initial={{ opacity: 0 }}
+          initial={reduce ? false : { opacity: 0 }}
+          transition={reduce ? { duration: 0 } : undefined}
           onClick={onCancel}
           className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
         >
           <motion.div
             animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 20 }}
-            initial={{ scale: 0.9, y: 20 }}
+            exit={reduce ? undefined : { scale: 0.98, y: 6 }}
+            initial={reduce ? false : { scale: 0.98, y: 8 }}
+            transition={reduce ? { duration: 0 } : undefined}
             onClick={(e) => e.stopPropagation()}
-            className="mx-4 flex flex-col items-center rounded-2xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl"
+            className="frosted-panel mx-4 flex flex-col items-center rounded-2xl p-8"
           >
             <span className="mb-6 text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
               Promote to

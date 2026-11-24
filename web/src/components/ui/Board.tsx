@@ -210,7 +210,7 @@ export const Board = memo(function Board({
             {isSelected && <span className="pointer-events-none absolute inset-0 board-highlight" />}
             {isDrop && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="h-1/3 w-1/3 rounded-full bg-emerald-400/60 ring-2 ring-emerald-300/50" />
+                <span className="h-1/3 w-1/3 rounded-full bg-accent-400/60 ring-2 ring-accent-300/50" />
               </span>
             )}
             {isCheck && (
@@ -228,12 +228,12 @@ export const Board = memo(function Board({
               <span className="pointer-events-none absolute inset-[7%] rounded-full border-4 border-black/25 md:border-[6px]" />
             )}
             {col === 0 && (
-              <span className={`absolute left-1 top-1 text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              <span className="board-coordinate absolute left-1 top-1 text-[10px] font-bold">
                 {square[1]}
               </span>
             )}
             {row === 7 && (
-              <span className={`absolute bottom-1 right-1 text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              <span className="board-coordinate absolute bottom-1 right-1 text-[10px] font-bold">
                 {square[0]}
               </span>
             )}

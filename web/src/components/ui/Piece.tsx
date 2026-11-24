@@ -47,8 +47,8 @@ export const Piece = React.memo(function Piece({ char, col, row, squareName, int
       initial={false}
       style={{ x: dragX, y: dragY, touchAction: interactive ? 'none' : 'auto' }}
       animate={{ left, top }}
-      whileHover={interactive && !reduce ? { scale: 1.04 } : undefined}
-      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 200, damping: 25 }}
+      whileHover={interactive && !reduce ? { scale: 1.03 } : undefined}
+      transition={reduce ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       drag={interactive}
       dragMomentum={false}
       onClick={() => interactive && onPieceClick(squareName)}

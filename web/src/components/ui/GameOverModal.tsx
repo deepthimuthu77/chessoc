@@ -52,7 +52,7 @@ export function GameOverModal({ isOpen, result, onRematch, rematchPending = fals
             aria-describedby={descriptionId}
             tabIndex={-1}
             animate={{ scale: 1, y: 0 }}
-            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col items-center overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl"
+            className="frosted-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col items-center overflow-y-auto rounded-2xl p-8"
             exit={reduce ? undefined : { scale: 0.98, y: 6 }}
             initial={reduce ? false : { scale: 0.98, y: 8 }}
           >

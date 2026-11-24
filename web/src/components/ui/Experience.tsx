@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { MotionConfig } from 'framer-motion';
+import { MotionConfig, useReducedMotion } from 'framer-motion';
 import { getSettings } from '@/lib/settings';
 
 export function Experience({ children }: { children: ReactNode }) {
   const [reduced, setReduced] = useState(false);
+  const systemReduced = useReducedMotion();
   useEffect(() => {
     const update = () => {
       const value = getSettings().reducedMotion;
@@ -20,5 +21,5 @@ export function Experience({ children }: { children: ReactNode }) {
       window.removeEventListener('chessoc-settings-changed', update);
     };
   }, []);
-  return <MotionConfig reducedMotion={reduced ? 'always' : 'user'} transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}>{children}</MotionConfig>;
+  return <MotionConfig reducedMotion={reduced ? 'always' : 'user'} transition={{ duration: reduced || systemReduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}>{children}</MotionConfig>;
 }

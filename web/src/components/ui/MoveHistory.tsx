@@ -21,9 +21,9 @@ export function MoveHistory({ history }: { history: string[] }) {
   }
 
   return (
-    <div className="surface flex h-72 w-full flex-col overflow-hidden">
+    <div className="surface flex h-40 w-full flex-col overflow-hidden lg:h-72">
       <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
-        <h3 className="text-xs font-medium text-zinc-200">The scoresheet</h3><span className="font-mono text-[10px] text-zinc-500">{history.length} {history.length === 1 ? 'ply' : 'plies'}</span>
+        <h3 className="text-xs font-medium text-zinc-200">Move list</h3><span className="font-mono text-[10px] text-zinc-500">{movePairs.length} {movePairs.length === 1 ? 'move' : 'moves'}</span>
       </div>
       
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -39,7 +39,7 @@ export function MoveHistory({ history }: { history: string[] }) {
         ))}
         {history.length === 0 && (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
-            Every story starts with a move.
+            No moves yet.
           </div>
         )}
       </div>

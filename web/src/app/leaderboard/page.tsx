@@ -36,7 +36,7 @@ export default function LeaderboardPage() {
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
 
       <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
-        <PageHeading eyebrow="THE CLUB RANKINGS" title="A little friendly ambition." description="Find your benchmark across variants and time controls. Every pool is a new way to grow." />
+        <PageHeading eyebrow="THE CLUB" title="Rankings" description="Compare ratings by variant and time control, globally or among friends." />
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-sm font-medium">Choose your field</h2>
           <div className="flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
@@ -100,7 +100,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
+      className={`min-h-11 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
         active ? 'bg-zinc-800 text-accent-400' : 'text-zinc-400 hover:text-zinc-200'
       }`}
     >

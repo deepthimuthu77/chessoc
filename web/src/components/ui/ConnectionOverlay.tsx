@@ -24,7 +24,7 @@ export function ConnectionOverlay({ status }: { status: Status }) {
 
   return (
     <div role="status" className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="relative rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center shadow-2xl">
+      <div className="frosted-panel relative rounded-2xl px-6 py-6 text-center">
         <span className="icon-well mx-auto mb-4"><Icon name="link" size={21} /></span>
         <p className="eyebrow justify-center">{copy.tag}</p>
         <h2 className="mt-3 font-serif text-3xl tracking-tight text-white">{copy.title}</h2>

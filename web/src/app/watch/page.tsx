@@ -43,7 +43,13 @@ export default function WatchPage() {
     <main className="min-h-screen app-background text-white">
       <TopNav username={account?.username} accountId={account?.id} onLogout={account ? logout : undefined} />
       <div id="main-content" tabIndex={-1} className="page-wrap page-enter" style={{ maxWidth: 1520 }}>
-        <PageHeading eyebrow="THE LIVE GALLERY" title="A front-row seat to every move." description="Discover a great game. Follow two boards at once. Curate a viewing room of your own." action={<span role="status" className="live-pill"><span className="live-dot" />{online ? `${feed.games.length} ${feed.games.length === 1 ? 'match' : 'matches'} live` : FEED_LABELS[feed.status]}</span>} />
+        <PageHeading eyebrow="THE LIVE GALLERY" title="Watch live games" description="Filter active matches by variant and speed. Pin up to four games to follow together." action={<span role="status" className="live-pill"><span className="live-dot" />{online ? `${feed.games.length} ${feed.games.length === 1 ? 'match' : 'matches'} live` : FEED_LABELS[feed.status]}</span>} />
+
+        {!expanded && <section aria-label="Live game filters" className="surface mb-5 grid gap-4 px-5 py-4 lg:grid-cols-[auto_1fr] lg:items-center">
+          <FilterGroup label="Variant" values={VARIANTS} selected={variant} onSelect={setVariant} />
+          <FilterGroup label="Speed" values={SPEEDS} selected={speed} onSelect={setSpeed} />
+          {pins.length > 0 && <p className="text-xs leading-relaxed text-zinc-500 lg:col-span-2">Filters apply to live matches below. Your pinned games stay in your viewing room.</p>}
+        </section>}
 
         <section ref={pinsPanel} role={expanded ? 'dialog' : undefined} aria-modal={expanded ? true : undefined}
           aria-labelledby="watch-pins-title" tabIndex={-1}
@@ -84,10 +90,6 @@ export default function WatchPage() {
         </section>
 
         {!expanded && <>
-          <section className="surface mb-2 grid gap-4 px-5 py-4 lg:grid-cols-[auto_1fr] lg:items-center">
-            <FilterGroup label="Variant" values={VARIANTS} selected={variant} onSelect={setVariant} />
-            <FilterGroup label="Speed" values={SPEEDS} selected={speed} onSelect={setSpeed} />
-          </section>
           {!online ? <div className="py-24 text-center text-sm text-zinc-400">{FEED_LABELS[feed.status]}
             {feed.status !== 'loading' && <p className="mt-2 text-zinc-500">Saved pins show their last known positions. Clocks are paused.</p>}
           </div> : filtered.length === 0 ? <div className="empty-state surface mt-5"><span className="icon-well"><Icon name="watch" /></span><h2>{feed.games.length === 0 ? 'The next great game is on its way.' : 'A quieter corner of the gallery.'}</h2><p>{feed.games.length === 0 ? 'Live matches appear here automatically. In the meantime, make the opening move yourself.' : 'There are no live games with these filters. Explore another variant or pace.'}</p>{feed.games.length === 0 ? <Link href="/" className="button-primary">Start a game<Icon name="arrow" size={15} /></Link> : <button type="button" className="button-secondary" onClick={() => { setVariant('all'); setSpeed('all'); }}>Show all games</button>}</div> : <div className="grid gap-5 py-6 sm:grid-cols-2 xl:grid-cols-3">

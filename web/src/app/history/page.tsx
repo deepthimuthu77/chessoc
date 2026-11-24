@@ -44,7 +44,7 @@ export default function HistoryPage() {
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
       <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
-        <PageHeading eyebrow="YOUR COLLECTION" title="Every game, worth revisiting." description="The wins, the lessons, the almosts. Replay your games and explore the moves that mattered." />
+        <PageHeading eyebrow="YOUR GAMES" title="Game history" description="Review your finished games, replay moves and analyze positions." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
 
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">

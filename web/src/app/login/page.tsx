@@ -1,13 +1,15 @@
 "use client";
 
-import { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useId, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { useAuth } from '@/hooks/use-auth';
 import { prefersReducedMotion } from '@/lib/settings';
 
 export default function LoginPage() {
+  const systemReduced = useReducedMotion();
+  const reduce = systemReduced || prefersReducedMotion();
   const { account, ready, sessionExpired, login, register, playAsGuest, authError, retryAuth } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -41,9 +43,9 @@ export default function LoginPage() {
     <main className="app-background flex min-h-screen items-center justify-center p-5 sm:p-10"><div className="auth-grid">
       <aside className="auth-story"><Link href="/" className="wordmark"><Icon name="knight" size={28} />chessoc.</Link><div className="auth-intro"><p className="eyebrow mb-4">FOR THE LOVE OF THE GAME</p><h2 className="display-title">An open seat.<br />A world of possibilities.</h2><p className="page-description mt-5">The timeless game, with a few new ways to fall in love with it.</p></div><div className="auth-details space-y-5"><div className="flex gap-3"><Icon name="layers" className="text-accent-300" /><p className="text-xs leading-relaxed text-zinc-400">Chess, crazyhouse, and bughouse.<br /><span className="text-zinc-500">Your friends, your team, or the computer.</span></p></div><div className="flex gap-3"><Icon name="watch" className="text-accent-300" /><p className="text-xs leading-relaxed text-zinc-400">A live gallery, made personal.<br /><span className="text-zinc-500">Pin four games. Follow every move.</span></p></div><Link href="/watch" className="text-link">Look around the gallery<Icon name="arrow" size={15} /></Link></div></aside>
       <motion.div
-        initial={prefersReducedMotion() ? false : { opacity: 0, y: 20 }}
+        initial={reduce ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+        transition={{ duration: reduce ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
         className="auth-form min-w-0"
       >
         <p className="eyebrow mb-4">{mode === 'login' ? 'WELCOME BACK' : 'YOUR NEXT CHAPTER'}</p><h1 className="page-title">{mode === 'login' ? 'Take your seat.' : 'Make it your game.'}</h1><p className="page-description mb-7">{mode === 'login' ? 'Sign in, settle in, and make your next move.' : 'A name, an account, and a place to call your own.'}</p>
@@ -75,7 +77,7 @@ export default function LoginPage() {
             setMode(mode === 'login' ? 'register' : 'login');
             setError(null);
           }}
-          className="mt-6 w-full text-center text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+          className="mt-4 min-h-11 w-full text-center text-sm text-zinc-500 transition-colors hover:text-zinc-300"
         >
           {mode === 'login' ? 'No account? Register' : 'Have an account? Sign in'}
         </button>
@@ -132,10 +134,17 @@ function Field({
   pattern?: string;
   disabled?: boolean;
 }) {
+  const id = useId();
+  const help = pattern ? 'Use 3–20 letters, numbers or underscores.' : type === 'password' && minLength ? `At least ${minLength} characters.` : null;
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-zinc-400">{label}</span>
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-zinc-400">{label}</label>
       <input
+        id={id}
+        aria-describedby={help ? `${id}-help` : undefined}
+        title={help ?? undefined}
+        autoCapitalize="none"
+        spellCheck={false}
         type={type}
         name={label.toLowerCase()}
         required
@@ -149,6 +158,7 @@ function Field({
         placeholder={placeholder}
         className="field"
       />
-    </label>
+      {help && <p id={`${id}-help`} className="text-xs text-zinc-500">{help}</p>}
+    </div>
   );
 }

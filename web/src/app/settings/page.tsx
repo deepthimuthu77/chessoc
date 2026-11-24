@@ -100,7 +100,7 @@ export default function SettingsPage() {
       <TopNav username={account.username} accountId={account.id} onLogout={logout} />
 
       <div id="main-content" tabIndex={-1} className="page-wrap page-wrap-narrow page-enter">
-        <PageHeading eyebrow="MAKE IT YOURS" title="A game that feels like you." description="Fine-tune the details, from the sound of a move to the way your board responds." />
+        <PageHeading eyebrow="YOUR PREFERENCES" title="Settings" description="Manage board behavior, sounds, motion and your account." />
         {authError && <p role="alert" className="mb-4 text-rose-400">{authError} <button type="button" onClick={() => void retryAuth()} className="underline">Retry session</button></p>}
         {settingsError && <p role="alert" className="mb-4 text-rose-400">{settingsError}</p>}
 
@@ -118,9 +118,9 @@ export default function SettingsPage() {
                 aria-describedby={`${t.key}-help`}
                 aria-checked={settings[t.key]}
                 onClick={() => toggle(t.key)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${settings[t.key] ? 'bg-accent-600' : 'bg-zinc-700'}`}
+                className="relative h-11 w-14 shrink-0 rounded-lg"
               >
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${settings[t.key] ? 'left-[22px]' : 'left-0.5'}`} />
+                <span aria-hidden="true" className={`absolute inset-x-1.5 top-2.5 h-6 rounded-full transition-colors ${settings[t.key] ? 'bg-accent-600' : 'bg-zinc-700'}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${settings[t.key] ? 'left-[22px]' : 'left-0.5'}`} /></span>
               </button>
             </div>
           ))}

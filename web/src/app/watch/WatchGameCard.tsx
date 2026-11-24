@@ -38,7 +38,7 @@ const WatchClock = memo(function WatchClock({ base, receivedAt, running, frozenA
   const now = useSyncExternalStore(running ? subscribeClock : subscribePausedClock,
     running ? getClockNow : getPausedClock, getPausedClock);
   const elapsed = receivedAt === undefined ? 0 : Math.max(0, (running ? now : frozenAt) - receivedAt);
-  return <span aria-label={label} aria-live="off" className={`shrink-0 font-mono font-bold tabular-nums ${running ? 'text-emerald-300' : 'text-zinc-400'}`}>
+  return <span aria-label={label} aria-live="off" className={`shrink-0 font-mono font-bold tabular-nums ${running ? 'text-accent-300' : 'text-zinc-400'}`}>
     {formatClock(base - elapsed)}
   </span>;
 });
